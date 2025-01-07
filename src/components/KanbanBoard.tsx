@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GripVertical } from 'lucide-react';
 import type { Order, Product } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 export function KanbanBoard() {
   const [orders, setOrders] = useState<Order[]>([]);

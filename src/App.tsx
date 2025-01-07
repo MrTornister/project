@@ -10,8 +10,7 @@ import { Orders } from './pages/Orders';
 import { KanbanBoard } from './components/KanbanBoard';
 import { Layout } from './components/Layout';
 import type { Order, Product } from './types';
-import { db } from './firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
+import { Settings } from './pages/Settings'; // Import the new Settings page
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -140,18 +139,14 @@ function App() {
       <Routes>
         <Route path="/" element={
           <Layout>
-            <div className="min-h-screen bg-gray-50">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <Dashboard />
-                <div className="mt-8">
-                  <KanbanBoard />
-                </div>
-              </div>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <Dashboard />
             </div>
           </Layout>
         } />
         <Route path="/products" element={<Products />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </Router>
   );

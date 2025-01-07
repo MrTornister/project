@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Package, Edit, Trash, Plus, Trash2 } from 'lucide-react';
 import type { Product } from '../types';
 import { ProductImport } from './ProductImport';
-import { db } from '../firebaseConfig';
-import { collection, getDocs, addDoc, deleteDoc, doc, writeBatch, updateDoc } from 'firebase/firestore';
+import { productsDB } from '../db/database';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -14,6 +13,7 @@ export function ProductList() {
   const [newProductName, setNewProductName] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Calculate pagination values
   const filteredProducts = products.filter(product => 
@@ -28,12 +28,15 @@ export function ProductList() {
 
   useEffect(() => {
     const fetchProducts = async () => {
-      const querySnapshot = await getDocs(collection(db, 'products'));
-      const productsList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
-      setProducts(productsList);
+      try {
+        setIsLoading(true);
+        const fetchedProducts = await productsDB.getAll();
+        setProducts(fetchedProducts);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchProducts();
@@ -43,46 +46,50 @@ export function ProductList() {
     e.preventDefault();
     if (!newProductName.trim()) return;
 
-    const newProduct: Omit<Product, 'id'> = {
-      name: newProductName.trim()
-    };
-
-    const docRef = await addDoc(collection(db, 'products'), newProduct);
-    setProducts([...products, { id: docRef.id, ...newProduct }]);
-    setNewProductName('');
-    setShowAddForm(false);
+    try {
+      const newProduct = await productsDB.add({ name: newProductName.trim() });
+      setProducts([...products, newProduct]);
+      setNewProductName('');
+      setShowAddForm(false);
+    } catch (error) {
+      console.error('Error adding product:', error);
+    }
   };
 
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct || !newProductName.trim()) return;
 
-    const productRef = doc(db, 'products', editingProduct.id);
-    await updateDoc(productRef, { name: newProductName.trim() });
-
-    setProducts(products.map(p => 
-      p.id === editingProduct.id ? { ...p, name: newProductName.trim() } : p
-    ));
-    setNewProductName('');
-    setEditingProduct(null);
+    try {
+      const updatedProduct = { ...editingProduct, name: newProductName.trim() };
+      await productsDB.update(updatedProduct);
+      setProducts(products.map(p => p.id === editingProduct.id ? updatedProduct : p));
+      setNewProductName('');
+      setEditingProduct(null);
+    } catch (error) {
+      console.error('Error updating product:', error);
+    }
   };
 
   const handleDeleteProduct = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
-      await deleteDoc(doc(db, 'products', id));
-      setProducts(products.filter(p => p.id !== id));
+      try {
+        await productsDB.delete(id);
+        setProducts(products.filter(p => p.id !== id));
+      } catch (error) {
+        console.error('Error deleting product:', error);
+      }
     }
   };
 
   const handleDeleteAllProducts = async () => {
     if (window.confirm('Are you sure you want to delete all products?')) {
-      const batch = writeBatch(db);
-      products.forEach(product => {
-        const productRef = doc(db, 'products', product.id);
-        batch.delete(productRef);
-      });
-      await batch.commit();
-      setProducts([]);
+      try {
+        await productsDB.deleteAll();
+        setProducts([]);
+      } catch (error) {
+        console.error('Error deleting all products:', error);
+      }
     }
   };
 
@@ -164,156 +171,173 @@ export function ProductList() {
         
         <ProductImport 
           onImport={async (importedProducts) => {
-            const batch = writeBatch(db);
-            importedProducts.forEach(product => {
-              const productRef = doc(collection(db, 'products'));
-              batch.set(productRef, product);
-            });
-            await batch.commit();
-            setProducts([...products, ...importedProducts]);
+            try {
+              // Używamy funkcji z IndexedDB zamiast Firebase
+              for (const product of importedProducts) {
+                const existingProduct = await productsDB.getAll();
+                const existing = existingProduct.find(p => p.id === product.id);
+                if (existing) {
+                  await productsDB.update(product);
+                } else {
+                  await productsDB.add({ name: product.name });
+                }
+              }
+              
+              // Odśwież listę produktów
+              const updatedProducts = await productsDB.getAll();
+              setProducts(updatedProducts);
+            } catch (error) {
+              console.error('Error importing products:', error);
+            }
           }} 
         />
       </div>
       
-      {/* Table View */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {currentProducts.map((product) => (
-              <tr key={product.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button 
-                    onClick={() => startEditing(product)}
-                    className="text-indigo-600 hover:text-indigo-900 mr-4"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteProduct(product.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <Trash className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      <div className="px-4 py-3 border-t border-gray-200 sm:px-6">
-        <div className="flex items-center justify-between">
-          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
-                <span className="font-medium">
-                  {Math.min(endIndex, filteredProducts.length)}
-                </span>{' '}
-                of <span className="font-medium">{filteredProducts.length}</span> products
-                {searchTerm.length >= 3 && (
-                  <span className="ml-1">
-                    (filtered from {products.length} total)
-                  </span>
-                )}
-              </p>
-            </div>
-            <div>
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                {/* First Page */}
-                <button
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <span className="sr-only">First</span>
-                  «
-                </button>
-
-                {/* Previous Page */}
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <span className="sr-only">Previous</span>
-                  ‹
-                </button>
-
-                {/* Page Numbers */}
-                {[...Array(totalPages)].map((_, i) => {
-                  const pageNumber = i + 1;
-                  // Show current page, 2 pages before and 1 page after
-                  if (
-                    pageNumber === 1 ||
-                    pageNumber === totalPages ||
-                    (pageNumber >= currentPage - 2 && pageNumber <= currentPage + 1)
-                  ) {
-                    return (
-                      <button
-                        key={pageNumber}
-                        onClick={() => setCurrentPage(pageNumber)}
-                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium
-                          ${currentPage === pageNumber
-                            ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
-                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                          }`}
+      {isLoading ? (
+        <div className="p-4 text-center">Loading products...</div>
+      ) : (
+        <>
+          {/* Table View */}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {currentProducts.map((product) => (
+                  <tr key={product.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.id}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button 
+                        onClick={() => startEditing(product)}
+                        className="text-indigo-600 hover:text-indigo-900 mr-4"
                       >
-                        {pageNumber}
+                        <Edit className="h-4 w-4" />
                       </button>
-                    );
-                  }
-                  // Show dots if there's a gap
-                  if (
-                    pageNumber === currentPage - 3 ||
-                    pageNumber === currentPage + 2
-                  ) {
-                    return (
-                      <span
-                        key={pageNumber}
-                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
+                      <button 
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="text-red-600 hover:text-red-900"
                       >
-                        ...
+                        <Trash className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="px-4 py-3 border-t border-gray-200 sm:px-6">
+            <div className="flex items-center justify-between">
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
+                    <span className="font-medium">
+                      {Math.min(endIndex, filteredProducts.length)}
+                    </span>{' '}
+                    of <span className="font-medium">{filteredProducts.length}</span> products
+                    {searchTerm.length >= 3 && (
+                      <span className="ml-1">
+                        (filtered from {products.length} total)
                       </span>
-                    );
-                  }
-                  return null;
-                })}
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    {/* First Page */}
+                    <button
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <span className="sr-only">First</span>
+                      «
+                    </button>
 
-                {/* Next Page */}
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <span className="sr-only">Next</span>
-                  ›
-                </button>
+                    {/* Previous Page */}
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <span className="sr-only">Previous</span>
+                      ‹
+                    </button>
 
-                {/* Last Page */}
-                <button
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <span className="sr-only">Last</span>
-                  »
-                </button>
-              </nav>
+                    {/* Page Numbers */}
+                    {[...Array(totalPages)].map((_, i) => {
+                      const pageNumber = i + 1;
+                      // Show current page, 2 pages before and 1 page after
+                      if (
+                        pageNumber === 1 ||
+                        pageNumber === totalPages ||
+                        (pageNumber >= currentPage - 2 && pageNumber <= currentPage + 1)
+                      ) {
+                        return (
+                          <button
+                            key={pageNumber}
+                            onClick={() => setCurrentPage(pageNumber)}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium
+                              ${currentPage === pageNumber
+                                ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                              }`}
+                          >
+                            {pageNumber}
+                          </button>
+                        );
+                      }
+                      // Show dots if there's a gap
+                      if (
+                        pageNumber === currentPage - 3 ||
+                        pageNumber === currentPage + 2
+                      ) {
+                        return (
+                          <span
+                            key={pageNumber}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
+                          >
+                            ...
+                          </span>
+                        );
+                      }
+                      return null;
+                    })}
+
+                    {/* Next Page */}
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <span className="sr-only">Next</span>
+                      ›
+                    </button>
+
+                    {/* Last Page */}
+                    <button
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <span className="sr-only">Last</span>
+                      »
+                    </button>
+                  </nav>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

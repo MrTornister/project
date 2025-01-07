@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Search } from 'lucide-react';
 import type { Product, Order } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
 import { generateOrderNumber } from '../utils/orderNumber';
 
 interface OrderFormProps {

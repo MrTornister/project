@@ -3,8 +3,9 @@ import { OrderList } from '../components/OrderList';
 import { Layout } from '../components/Layout';
 import { OrderForm } from '../components/OrderForm';
 import type { Order } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, addDoc } from 'firebase/firestore';
+// Remove the following lines
+// import { db } from '../firebaseConfig';
+// import { collection, addDoc } from 'firebase/firestore';
 
 export function Orders() {
   const [showOrderForm, setShowOrderForm] = useState(false);
@@ -23,7 +24,8 @@ export function Orders() {
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    await addDoc(collection(db, 'orders'), newOrder);
+    // Replace this with your own logic to save the order
+    // await addDoc(collection(db, 'orders'), newOrder);
     setShowOrderForm(false);
   };
 

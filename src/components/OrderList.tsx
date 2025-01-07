@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardList, Edit, Trash } from 'lucide-react';
 import type { Order, Product } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import Modal from 'react-modal';

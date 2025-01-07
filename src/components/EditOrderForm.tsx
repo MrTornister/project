@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, AlertCircle, Search, Plus } from 'lucide-react';
 import type { Product, Order } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 
 interface EditOrderFormProps {
   order: Order;

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, AlertCircle, CheckCircle } from 'lucide-react';
 import type { Product } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, writeBatch, doc } from 'firebase/firestore';
+import { productsDB } from '../db/database';
 import Papa from 'papaparse';
 
 interface ProductImportProps {
@@ -22,27 +21,37 @@ export function ProductImport({ onImport }: ProductImportProps) {
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          const products: Product[] = results.data.map((row: any) => ({
-            id: row.id,
-            name: row.name
-          }));
+          console.log('Parsed Results:', results.data);
+          const emailData = results.data as EmailData[];
+          
+          // Validate required fields
+          const invalidEmails = emailData.filter(email => 
+            !email.sender_email || !email.email_id
+          );
 
-          const batch = writeBatch(db);
-          products.forEach(product => {
-            const productRef = doc(collection(db, 'products'), product.id);
-            batch.set(productRef, product);
-          });
-          await batch.commit();
+          if (invalidEmails.length > 0) {
+            throw new Error('Some emails have missing required fields');
+          }
 
-          onImport(products);
+          // Clear existing emails
+          await emailsDB.deleteAll();
+
+          // Add new emails
+          for (const email of emailData) {
+            await emailsDB.add(email);
+          }
+
+          await loadEmails();
           setStatus('success');
-          setMessage(`${products.length} products imported successfully`);
+          setMessage(`${emailData.length} emails imported successfully`);
         } catch (error) {
+          console.error('Import Error:', error);
           setStatus('error');
-          setMessage(error instanceof Error ? error.message : 'Failed to import products');
+          setMessage(error instanceof Error ? error.message : 'Import failed');
         }
       },
       error: (error) => {
+        console.error('Parsing Error:', error);
         setStatus('error');
         setMessage(error.message);
       }
