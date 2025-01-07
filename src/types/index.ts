@@ -21,11 +21,7 @@ export interface Order {
     productId: string;
     quantity: number;
   }>;
-  userId: string;
-  notes?: string;
-  confirmation?: string;
-  documentPZ?: string;
-  invoice?: string;
+  orderNumber: string;  // add this field
   createdAt: Date;
   updatedAt: Date;
 }

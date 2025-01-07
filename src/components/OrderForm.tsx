@@ -3,6 +3,7 @@ import { Plus, X, Search } from 'lucide-react';
 import type { Product, Order } from '../types';
 import { db } from '../firebaseConfig';
 import { collection, getDocs } from 'firebase/firestore';
+import { generateOrderNumber } from '../utils/orderNumber';
 
 interface OrderFormProps {
   onSubmit: (order: Omit<Order, 'id' | 'createdAt' | 'updatedAt' | 'totalAmount'>) => void;
@@ -70,22 +71,29 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
     setSelectedProducts(selectedProducts.filter(p => p.product.id !== productId));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const newOrder: Omit<Order, 'id' | 'createdAt' | 'updatedAt' | 'totalAmount'> = {
-      clientName,
-      projectName,
-      status: 'pending',
-      products: selectedProducts.map(({ product, quantity }) => ({
-        productId: product.id,
-        quantity
-      })),
-      userId: '1', // This should be replaced with actual user ID
-      notes
-    };
+    try {
+      const orderNumber = await generateOrderNumber();
 
-    onSubmit(newOrder);
+      const newOrder: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> = {
+        orderNumber,
+        clientName,
+        projectName,
+        status: 'pending',
+        products: selectedProducts.map(({ product, quantity }) => ({
+          productId: product.id,
+          quantity
+        })),
+        userId: '1',
+        notes
+      };
+
+      onSubmit(newOrder);
+    } catch (error) {
+      console.error('Error generating order number:', error);
+    }
   };
 
   return (

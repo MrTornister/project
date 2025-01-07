@@ -64,10 +64,13 @@ export function KanbanBoard() {
                 .map((order) => (
                   <div
                     key={order.id}
-                    className="bg-white rounded-lg shadow p-4 cursor-move hover:shadow-md transition-shadow"
+                    className="bg-white rounded-lg shadow p-4"
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <h5 className="font-medium text-gray-900">{order.clientName}</h5>
+                      <div>
+                        <h5 className="font-medium text-gray-900">{order.clientName}</h5>
+                        <span className="text-xs text-gray-500">{order.orderNumber}</span>
+                      </div>
                       <span className="text-xs text-gray-500">
                         {order.createdAt.toLocaleDateString()}
                       </span>
