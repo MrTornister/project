@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ClipboardList, Edit, Trash } from 'lucide-react';
+import { useData } from '../contexts/DataContext';
 import type { Order, Product } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import Modal from 'react-modal';
@@ -13,34 +12,8 @@ interface OrderListProps {
 }
 
 export function OrderList({ onNewOrder }: OrderListProps) {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const { orders, products, refreshOrders } = useData();
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-
-  useEffect(() => {
-    const fetchOrders = async () => {
-      const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(ordersQuery);
-      const ordersList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Order[];
-      setOrders(ordersList);
-    };
-
-    const fetchProducts = async () => {
-      const productsQuery = query(collection(db, 'products'));
-      const querySnapshot = await getDocs(productsQuery);
-      const productsList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
-      setProducts(productsList);
-    };
-
-    fetchOrders();
-    fetchProducts();
-  }, []);
 
   const getProductName = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -55,8 +28,8 @@ export function OrderList({ onNewOrder }: OrderListProps) {
     setEditingOrder(null);
   };
 
-  const handleSubmitEdit = (updatedOrder: Order) => {
-    setOrders(orders.map(order => order.id === updatedOrder.id ? updatedOrder : order));
+  const handleSubmitEdit = async (updatedOrder: Order) => {
+    await refreshOrders();
     setEditingOrder(null);
   };
 
@@ -78,9 +51,7 @@ export function OrderList({ onNewOrder }: OrderListProps) {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Order Number
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order Number</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>

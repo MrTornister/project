@@ -3,6 +3,7 @@ import { X, AlertCircle, Search, Plus } from 'lucide-react';
 import type { Product, Order } from '../types';
 import { db } from '../firebaseConfig';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { useData } from '../contexts/DataContext';
 
 interface EditOrderFormProps {
   order: Order;
@@ -16,6 +17,7 @@ interface OrderProduct {
 }
 
 export function EditOrderForm({ order, onSubmit, onCancel }: EditOrderFormProps) {
+  const { products, refreshOrders } = useData();
   const [clientName, setClientName] = useState(order.clientName);
   const [projectName, setProjectName] = useState(order.projectName);
   const [status, setStatus] = useState(order.status);
@@ -23,7 +25,6 @@ export function EditOrderForm({ order, onSubmit, onCancel }: EditOrderFormProps)
   const [documentPZ, setDocumentPZ] = useState(order.documentPZ || '');
   const [invoice, setInvoice] = useState(order.invoice || '');
   const [notes, setNotes] = useState(order.notes || '');
-  const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<OrderProduct[]>(order.products.map(p => ({
@@ -32,21 +33,11 @@ export function EditOrderForm({ order, onSubmit, onCancel }: EditOrderFormProps)
   })));
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      const querySnapshot = await getDocs(collection(db, 'products'));
-      const productsList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
-      setProducts(productsList);
-      setSelectedProducts(selectedProducts.map(p => ({
-        ...p,
-        product: productsList.find(product => product.id === p.product.id) || p.product
-      })));
-    };
-
-    fetchProducts();
-  }, []);
+    setSelectedProducts(selectedProducts.map(p => ({
+      ...p,
+      product: products.find(product => product.id === p.product.id) || p.product
+    })));
+  }, [products]);
 
   useEffect(() => {
     if (searchTerm.length >= 2) {
@@ -99,6 +90,7 @@ export function EditOrderForm({ order, onSubmit, onCancel }: EditOrderFormProps)
 
     const orderRef = doc(db, 'orders', order.id);
     await updateDoc(orderRef, updatedOrder);
+    await refreshOrders();
 
     onSubmit(updatedOrder);
   };

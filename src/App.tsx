@@ -12,6 +12,7 @@ import { Layout } from './components/Layout';
 import type { Order, Product } from './types';
 import { db } from './firebaseConfig';
 import { collection, getDocs } from 'firebase/firestore';
+import { DataProvider } from './contexts/DataContext';
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -136,24 +137,26 @@ export function LocalOrderList({ onNewOrder }: OrderListProps) {
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={
-          <Layout>
-            <div className="min-h-screen bg-gray-50">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <Dashboard />
-                <div className="mt-8">
-                  <KanbanBoard />
+    <DataProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={
+            <Layout>
+              <div className="min-h-screen bg-gray-50">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                  <Dashboard />
+                  <div className="mt-8">
+                    <KanbanBoard />
+                  </div>
                 </div>
               </div>
-            </div>
-          </Layout>
-        } />
-        <Route path="/products" element={<Products />} />
-        <Route path="/orders" element={<Orders />} />
-      </Routes>
-    </Router>
+            </Layout>
+          } />
+          <Route path="/products" element={<Products />} />
+          <Route path="/orders" element={<Orders />} />
+        </Routes>
+      </Router>
+    </DataProvider>
   );
 }
 

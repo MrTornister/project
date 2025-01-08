@@ -5,9 +5,11 @@ import { OrderForm } from '../components/OrderForm';
 import type { Order } from '../types';
 import { db } from '../firebaseConfig';
 import { collection, addDoc } from 'firebase/firestore';
+import { useData } from '../contexts/DataContext';
 
 export function Orders() {
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const { refreshOrders } = useData();
 
   const handleNewOrder = () => {
     setShowOrderForm(true);
@@ -18,13 +20,20 @@ export function Orders() {
   };
 
   const handleSubmitOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newOrder = {
-      ...order,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    await addDoc(collection(db, 'orders'), newOrder);
-    setShowOrderForm(false);
+    try {
+      const newOrder = {
+        ...order,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await addDoc(collection(db, 'orders'), newOrder);
+      await refreshOrders(); // Refresh orders after adding new one
+      setShowOrderForm(false);
+    } catch (error) {
+      console.error('Error adding order:', error);
+      // Here you might want to show an error message to the user
+    }
   };
 
   return (

@@ -1,38 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { GripVertical } from 'lucide-react';
+import { useData } from '../contexts/DataContext';
 import type { Order, Product } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 export function KanbanBoard() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      // Fetch orders
-      const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-      const ordersSnapshot = await getDocs(ordersQuery);
-      const ordersList = ordersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate()
-      })) as Order[];
-      setOrders(ordersList);
-
-      // Fetch products for reference
-      const productsQuery = query(collection(db, 'products'));
-      const productsSnapshot = await getDocs(productsQuery);
-      const productsList = productsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
-      setProducts(productsList);
-    };
-
-    fetchData();
-  }, []);
+  const { orders, products } = useData();
 
   const getProductName = (productId: string) => {
     const product = products.find(p => p.id === productId);
