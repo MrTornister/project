@@ -17,11 +17,15 @@ export interface Order {
   clientName: string;
   projectName: string;
   status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
+  confirmation?: string;
+  documentPZ?: string;
+  invoice?: string;
   products: Array<{
     productId: string;
     quantity: number;
   }>;
-  orderNumber: string;  // add this field
+  notes?: string;
+  orderNumber: string;
   createdAt: Date;
   updatedAt: Date;
 }

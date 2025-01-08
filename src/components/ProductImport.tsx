@@ -22,28 +22,29 @@ export function ProductImport({ onImport }: ProductImportProps) {
       complete: async (results) => {
         try {
           console.log('Parsed Results:', results.data);
-          const emailData = results.data as EmailData[];
+          const productsData = results.data as Partial<Product>[];
           
           // Validate required fields
-          const invalidEmails = emailData.filter(email => 
-            !email.sender_email || !email.email_id
+          const invalidProducts = productsData.filter(product => 
+            !product.name
           );
 
-          if (invalidEmails.length > 0) {
-            throw new Error('Some emails have missing required fields');
+          if (invalidProducts.length > 0) {
+            throw new Error('Some products have missing required fields (name)');
           }
 
-          // Clear existing emails
-          await emailsDB.deleteAll();
-
-          // Add new emails
-          for (const email of emailData) {
-            await emailsDB.add(email);
+          // Process products
+          const importedProducts: Product[] = [];
+          for (const product of productsData) {
+            if (product.name) {
+              const newProduct = await productsDB.add({ name: product.name });
+              importedProducts.push(newProduct);
+            }
           }
 
-          await loadEmails();
+          onImport(importedProducts);
           setStatus('success');
-          setMessage(`${emailData.length} emails imported successfully`);
+          setMessage(`${importedProducts.length} products imported successfully`);
         } catch (error) {
           console.error('Import Error:', error);
           setStatus('error');
@@ -63,7 +64,7 @@ export function ProductImport({ onImport }: ProductImportProps) {
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 cursor-pointer">
           <Upload className="h-4 w-4" />
-          Import CSV
+          Import Products CSV
           <input
             type="file"
             accept=".csv"
@@ -85,7 +86,7 @@ export function ProductImport({ onImport }: ProductImportProps) {
         )}
       </div>
       <div className="mt-2 text-sm text-gray-500">
-        CSV file should contain: id, name
+        CSV file should contain: name (required)
       </div>
     </div>
   );

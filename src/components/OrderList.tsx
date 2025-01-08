@@ -5,6 +5,7 @@ import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import Modal from 'react-modal';
 import { EditOrderForm } from './EditOrderForm';
+import { ordersDB, productsDB } from '../db/database';
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -16,28 +17,16 @@ export function OrderList({ onNewOrder }: OrderListProps) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(ordersQuery);
-      const ordersList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Order[];
-      setOrders(ordersList);
+    const fetchData = async () => {
+      const [fetchedOrders, fetchedProducts] = await Promise.all([
+        ordersDB.getAll(),
+        productsDB.getAll()
+      ]);
+      setOrders(fetchedOrders);
+      setProducts(fetchedProducts);
     };
 
-    const fetchProducts = async () => {
-      const productsQuery = query(collection(db, 'products'));
-      const querySnapshot = await getDocs(productsQuery);
-      const productsList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
-      setProducts(productsList);
-    };
-
-    fetchOrders();
-    fetchProducts();
+    fetchData();
   }, []);
 
   const getProductName = (productId: string) => {
@@ -53,9 +42,19 @@ export function OrderList({ onNewOrder }: OrderListProps) {
     setEditingOrder(null);
   };
 
-  const handleSubmitEdit = (updatedOrder: Order) => {
-    setOrders(orders.map(order => order.id === updatedOrder.id ? updatedOrder : order));
+  const handleSubmitEdit = async (updatedOrder: Order) => {
+    await ordersDB.update(updatedOrder);
+    setOrders(orders.map(order => 
+      order.id === updatedOrder.id ? updatedOrder : order
+    ));
     setEditingOrder(null);
+  };
+
+  const handleDeleteOrder = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this order?')) {
+      await ordersDB.delete(id);
+      setOrders(orders.filter(order => order.id !== id));
+    }
   };
 
   return (
@@ -128,7 +127,10 @@ export function OrderList({ onNewOrder }: OrderListProps) {
                     >
                       <Edit className="h-4 w-4" />
                     </button>
-                    <button className="text-red-600 hover:text-red-900">
+                    <button 
+                      onClick={() => handleDeleteOrder(order.id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
                       <Trash className="h-4 w-4" />
                     </button>
                   </td>

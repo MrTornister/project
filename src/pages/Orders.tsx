@@ -3,12 +3,11 @@ import { OrderList } from '../components/OrderList';
 import { Layout } from '../components/Layout';
 import { OrderForm } from '../components/OrderForm';
 import type { Order } from '../types';
-// Remove the following lines
-// import { db } from '../firebaseConfig';
-// import { collection, addDoc } from 'firebase/firestore';
+import { ordersDB } from '../db/database';
 
 export function Orders() {
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // Add this line
 
   const handleNewOrder = () => {
     setShowOrderForm(true);
@@ -18,15 +17,16 @@ export function Orders() {
     setShowOrderForm(false);
   };
 
-  const handleSubmitOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newOrder = {
-      ...order,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    // Replace this with your own logic to save the order
-    // await addDoc(collection(db, 'orders'), newOrder);
-    setShowOrderForm(false);
+  const handleSubmitOrder = async (orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const newOrder = await ordersDB.add(orderData);
+      console.log('New order created:', newOrder);
+      setShowOrderForm(false);
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Error saving order:', error);
+      alert('Failed to save order. Please try again.');
+    }
   };
 
   return (
@@ -36,7 +36,7 @@ export function Orders() {
           {showOrderForm ? (
             <OrderForm onSubmit={handleSubmitOrder} onCancel={handleCancelOrder} />
           ) : (
-            <OrderList onNewOrder={handleNewOrder} />
+            <OrderList key={refreshKey} onNewOrder={handleNewOrder} />
           )}
         </div>
       </div>
