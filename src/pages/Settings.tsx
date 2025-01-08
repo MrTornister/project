@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { EmailSettings } from '../components/EmailSettings';
 import { Settings as SettingsIcon, X, Loader2 } from 'lucide-react';
@@ -31,39 +31,41 @@ export function Settings() {
     setSelectedEmail(email);
     setIsLoading(true);
     setError(null);
-    
+
     try {
-      // Build Google Drive file URL using file_id
-      const driveUrl = `https://drive.google.com/uc?export=view&id=${email.file_id}`;
-      const response = await fetch(driveUrl);
-      if (!response.ok) {
-        throw new Error('Failed to fetch email content');
-      }
+      // Pobierz plik z lokalnego serwera
+      const response = await fetch(`http://localhost:3001/api/email/${email.file_id}`);
+      if (!response.ok) throw new Error('Failed to fetch email content');
       
-      let htmlContent = await response.text();
+      const htmlContent = await response.text();
       
-      // Decode HTML entities
-      const parser = new DOMParser();
-      const decodedDoc = parser.parseFromString(htmlContent, 'text/html');
-      
-      // Extract body content and ensure proper styling
-      const bodyContent = decodedDoc.body ? decodedDoc.body.innerHTML : htmlContent;
-      const formattedHtml = `
+      // Przygotuj treść do wyświetlenia
+      const sanitizedContent = `
         <!DOCTYPE html>
         <html>
           <head>
             <meta charset="UTF-8">
+            <base target="_blank">
             <style>
-              body { font-family: Arial, sans-serif; padding: 20px; }
+              body { 
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                line-height: 1.5;
+              }
               img { max-width: 100%; height: auto; }
-              pre { white-space: pre-wrap; word-wrap: break-word; }
+              table { width: 100%; border-collapse: collapse; }
+              td, th { padding: 8px; border: 1px solid #ddd; }
             </style>
           </head>
-          <body>${bodyContent}</body>
+          <body>
+            <div class="email-content">
+              ${htmlContent}
+            </div>
+          </body>
         </html>
       `;
 
-      setEmailContent(formattedHtml);
+      setEmailContent(sanitizedContent);
     } catch (err) {
       console.error('Error:', err);
       setError('Could not load email content. Please try again.');
@@ -172,7 +174,7 @@ export function Settings() {
               </div>
 
               {/* Modal Content */}
-              <div className="flex-1 overflow-auto p-6">
+              <div className="flex-1 overflow-auto p-6 email-content">
                 {isLoading && (
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
@@ -197,12 +199,14 @@ export function Settings() {
                 )}
 
                 {!isLoading && !error && emailContent && (
-                  <div 
-                    className="prose max-w-none email-content"
-                    dangerouslySetInnerHTML={{ 
-                      __html: emailContent 
-                    }} 
-                  />
+                  <div className="h-full bg-white overflow-auto">
+                    <iframe
+                      srcDoc={emailContent}
+                      className="w-full h-full"
+                      sandbox="allow-same-origin"
+                      style={{ minHeight: '500px' }}
+                    />
+                  </div>
                 )}
               </div>
             </div>

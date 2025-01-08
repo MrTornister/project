@@ -19,7 +19,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return cached ? JSON.parse(cached) : [];
   });
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading] = useState(true);
 
   const refreshOrders = async () => {
     const ordersQuery = query(
