@@ -13,6 +13,7 @@ import type { Order, Product } from './types';
 import { db } from './firebaseConfig';
 import { collection, getDocs } from 'firebase/firestore';
 import { DataProvider } from './contexts/DataContext';
+import { Settings } from './pages/Settings';
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -154,6 +155,7 @@ function App() {
           } />
           <Route path="/products" element={<Products />} />
           <Route path="/orders" element={<Orders />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </Router>
     </DataProvider>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, Package, ClipboardList, LayoutDashboard } from 'lucide-react';
+import { Activity, Package, ClipboardList, LayoutDashboard, Settings as SettingsIcon } from 'lucide-react';
 
 export function Navigation() {
   const location = useLocation();
@@ -18,6 +18,7 @@ export function Navigation() {
               <NavLink to="/" icon={<LayoutDashboard className="h-5 w-5" />} text="Dashboard" />
               <NavLink to="/products" icon={<Package className="h-5 w-5" />} text="Products" />
               <NavLink to="/orders" icon={<ClipboardList className="h-5 w-5" />} text="Orders" />
+              <NavLink to="/settings" icon={<SettingsIcon className="h-5 w-5" />} text="Settings" />
             </div>
           </div>
         </div>

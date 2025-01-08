@@ -1,3 +1,31 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+// ...existing styles...
+
+.email-content {
+  color: #333;
+  line-height: 1.6;
+}
+
+.email-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.email-content a {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+.email-content table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.email-content td,
+.email-content th {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
