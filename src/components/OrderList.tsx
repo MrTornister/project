@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClipboardList, Edit, Trash } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import type { Order, Product } from '../types';
@@ -6,6 +6,8 @@ import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import Modal from 'react-modal';
 import { EditOrderForm } from './EditOrderForm';
+import { collection, getDocs, query, orderBy, limit, startAfter } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -14,6 +16,27 @@ interface OrderListProps {
 export function OrderList({ onNewOrder }: OrderListProps) {
   const { orders, products, refreshOrders } = useData();
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        orderBy('createdAt', 'desc'),
+        limit(ITEMS_PER_PAGE),
+        startAfter((page - 1) * ITEMS_PER_PAGE)
+      );
+      const querySnapshot = await getDocs(ordersQuery);
+      const ordersList = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Order[];
+      setOrders(ordersList);
+    };
+
+    fetchOrders();
+  }, [page]);
 
   const getProductName = (productId: string) => {
     const product = products.find(p => p.id === productId);

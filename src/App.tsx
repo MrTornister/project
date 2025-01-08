@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ClipboardList, Edit, Trash } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
@@ -14,6 +14,7 @@ import { db } from './firebaseConfig';
 import { collection, getDocs } from 'firebase/firestore';
 import { DataProvider } from './contexts/DataContext';
 import { Settings } from './pages/Settings';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -138,27 +139,31 @@ export function LocalOrderList({ onNewOrder }: OrderListProps) {
 
 function App() {
   return (
-    <DataProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={
-            <Layout>
-              <div className="min-h-screen bg-gray-50">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                  <Dashboard />
-                  <div className="mt-8">
-                    <KanbanBoard />
+    <ErrorBoundary>
+      <DataProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={
+              <Layout>
+                <Suspense fallback={<div>Loading...</div>}>
+                  <div className="min-h-screen bg-gray-50">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                      <Dashboard />
+                      <div className="mt-8">
+                        <KanbanBoard />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </Layout>
-          } />
-          <Route path="/products" element={<Products />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </Router>
-    </DataProvider>
+                </Suspense>
+              </Layout>
+            } />
+            <Route path="/products" element={<Products />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </Router>
+      </DataProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -1,45 +1,79 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RefreshCw, Save, AlertCircle } from 'lucide-react';
+import { db } from '../firebaseConfig';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { EmailData } from '../types';
 import Papa from 'papaparse';
+
+// Add type for CSV row
+interface CSVRow {
+  email_id: string;
+  sender_name: string;
+  sender_email: string;
+  date: string;
+  subject: string;
+  folder_id: string;
+  file_id: string;
+}
 
 interface EmailSettingsProps {
   onDataLoad: (emails: EmailData[]) => void;
 }
 
 export function EmailSettings({ onDataLoad }: EmailSettingsProps) {
-  const [csvUrl, setCsvUrl] = useState(localStorage.getItem('emailCsvUrl') || '');
+  const [csvUrl, setCsvUrl] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
-  const handleSaveUrl = () => {
+  // Load URL from Firestore on component mount
+  useEffect(() => {
+    const loadSavedUrl = async () => {
+      const settingsRef = doc(db, 'settings', 'emailSettings');
+      const settingsDoc = await getDoc(settingsRef);
+      if (settingsDoc.exists()) {
+        setCsvUrl(settingsDoc.data().csvUrl || '');
+      }
+    };
+    
+    loadSavedUrl();
+  }, []);
+
+  const handleSaveUrl = async () => {
     if (csvUrl.trim()) {
-      localStorage.setItem('emailCsvUrl', csvUrl.trim());
-      setStatus('success');
-      setMessage('URL saved successfully');
+      try {
+        const settingsRef = doc(db, 'settings', 'emailSettings');
+        await setDoc(settingsRef, { csvUrl: csvUrl.trim() });
+        setStatus('success');
+        setMessage('URL saved successfully');
+      } catch (error) {
+        setStatus('error');
+        setMessage('Failed to save URL');
+      }
     }
   };
 
   const loadEmailData = async () => {
-    const savedUrl = localStorage.getItem('emailCsvUrl');
-    if (!savedUrl) {
-      setStatus('error');
-      setMessage('No CSV URL configured');
-      return;
-    }
-
-    setStatus('loading');
-    setMessage('Loading data...');
-
     try {
-      const response = await fetch(savedUrl);
+      const settingsRef = doc(db, 'settings', 'emailSettings');
+      const settingsDoc = await getDoc(settingsRef);
+      
+      if (!settingsDoc.exists() || !settingsDoc.data().csvUrl) {
+        setStatus('error');
+        setMessage('No CSV URL configured');
+        return;
+      }
+
+      setStatus('loading');
+      setMessage('Loading data...');
+
+      const response = await fetch(settingsDoc.data().csvUrl);
       const csvText = await response.text();
 
-      Papa.parse(csvText, {
+      Papa.parse<CSVRow>(csvText, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
-          const emails: EmailData[] = results.data.map((row: any) => ({
+          const emails: EmailData[] = results.data.map((row) => ({
             id: row.email_id,
             sender_name: row.sender_name,
             sender_email: row.sender_email,
@@ -50,7 +84,7 @@ export function EmailSettings({ onDataLoad }: EmailSettingsProps) {
             file_id: row.file_id,
             web_link_view: `https://drive.google.com/file/d/${row.file_id}/view`
           }));
-
+          
           // Store in localStorage for offline access
           localStorage.setItem('emailData', JSON.stringify(emails));
           
@@ -58,7 +92,7 @@ export function EmailSettings({ onDataLoad }: EmailSettingsProps) {
           setStatus('success');
           setMessage(`Loaded ${emails.length} emails successfully`);
         },
-        error: (error) => {
+        error: (error: Error) => {
           setStatus('error');
           setMessage(`Error parsing CSV: ${error.message}`);
         }

@@ -21,9 +21,13 @@ export interface Order {
     productId: string;
     quantity: number;
   }>;
-  orderNumber: string;  // add this field
+  orderNumber: string;
   createdAt: Date;
   updatedAt: Date;
+  notes?: string;
+  confirmation?: string;
+  documentPZ?: string;
+  invoice?: string;
 }
 
 // Add this to existing types

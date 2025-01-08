@@ -1,42 +1,51 @@
 // src/contexts/DataContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import type { Order, Product } from '../types';
 import { db } from '../firebaseConfig';
 
 interface DataContextType {
   orders: Order[];
   products: Product[];
-  refreshOrders: () => Promise<void>;
-  refreshProducts: () => Promise<void>;
   loading: boolean;
+  refreshOrders: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const cached = localStorage.getItem('orders');
+    return cached ? JSON.parse(cached) : [];
+  });
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch initial data and set up real-time listeners
-  useEffect(() => {
-    const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-    const productsQuery = query(collection(db, 'products'));
+  const refreshOrders = async () => {
+    const ordersQuery = query(
+      collection(db, 'orders'),
+      orderBy('createdAt', 'desc'),
+      limit(100)
+    );
 
-    // Set up real-time listener for orders
-    const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
-      const ordersList = snapshot.docs.map(doc => ({
+    const querySnapshot = await getDocs(ordersQuery);
+    const ordersList = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
         id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate()
-      })) as Order[];
-      setOrders(ordersList);
-      setLoading(false);
-    });
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date()
+      };
+    }) as Order[];
+    setOrders(ordersList);
+    localStorage.setItem('orders', JSON.stringify(ordersList));
+  };
 
-    // Set up real-time listener for products
+  useEffect(() => {
+    refreshOrders();
+
+    const productsQuery = query(collection(db, 'products'));
     const unsubscribeProducts = onSnapshot(productsQuery, (snapshot) => {
       const productsList = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -45,46 +54,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setProducts(productsList);
     });
 
-    // Cleanup listeners on unmount
     return () => {
-      unsubscribeOrders();
       unsubscribeProducts();
     };
   }, []);
 
-  // Manual refresh functions if needed
-  const refreshOrders = async () => {
-    const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(ordersQuery);
-    const ordersList = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate(),
-      updatedAt: doc.data().updatedAt?.toDate()
-    })) as Order[];
-    setOrders(ordersList);
-  };
-
-  const refreshProducts = async () => {
-    const productsQuery = query(collection(db, 'products'));
-    const snapshot = await getDocs(productsQuery);
-    const productsList = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Product[];
-    setProducts(productsList);
-  };
-
   return (
-    <DataContext.Provider 
-      value={{ 
-        orders, 
-        products, 
-        refreshOrders,
-        refreshProducts,
-        loading
-      }}
-    >
+    <DataContext.Provider value={{ orders, products, loading, refreshOrders }}>
       {children}
     </DataContext.Provider>
   );

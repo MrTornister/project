@@ -90,9 +90,14 @@ export function EditOrderForm({ order, onSubmit, onCancel }: EditOrderFormProps)
 
     const orderRef = doc(db, 'orders', order.id);
     await updateDoc(orderRef, updatedOrder);
-    await refreshOrders();
+    await handleSubmitEdit(updatedOrder);
 
     onSubmit(updatedOrder);
+  };
+
+  const handleSubmitEdit = async (updatedOrder: Order) => {
+    await refreshOrders(); // Niepotrzebne przy real-time listeners
+    setEditingOrder(null);
   };
 
   return (

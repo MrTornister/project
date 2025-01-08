@@ -13,6 +13,15 @@ export function ProductImport({ onImport }: ProductImportProps) {
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
+  const handleImport = async (products: Product[]) => {
+    const batch = writeBatch(db);
+    products.forEach(product => {
+      const ref = doc(collection(db, 'products'));
+      batch.set(ref, product);
+    });
+    await batch.commit(); // Jedna operacja zamiast wielu pojedynczych
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -27,12 +36,7 @@ export function ProductImport({ onImport }: ProductImportProps) {
             name: row.name
           }));
 
-          const batch = writeBatch(db);
-          products.forEach(product => {
-            const productRef = doc(collection(db, 'products'), product.id);
-            batch.set(productRef, product);
-          });
-          await batch.commit();
+          await handleImport(products);
 
           onImport(products);
           setStatus('success');

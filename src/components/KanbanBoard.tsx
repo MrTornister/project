@@ -2,6 +2,7 @@ import React from 'react';
 import { GripVertical } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import type { Order, Product } from '../types';
+import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 
 export function KanbanBoard() {
   const { orders, products } = useData();
@@ -44,7 +45,9 @@ export function KanbanBoard() {
                         <span className="text-xs text-gray-500">{order.orderNumber}</span>
                       </div>
                       <span className="text-xs text-gray-500">
-                        {order.createdAt.toLocaleDateString()}
+                        {order.createdAt instanceof Date 
+                          ? order.createdAt.toLocaleDateString()
+                          : new Date(order.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                     <p className="text-sm text-gray-500 mb-2">{order.projectName}</p>

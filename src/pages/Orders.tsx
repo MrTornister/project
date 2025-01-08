@@ -28,11 +28,10 @@ export function Orders() {
       };
 
       await addDoc(collection(db, 'orders'), newOrder);
-      await refreshOrders(); // Refresh orders after adding new one
+      await refreshOrders();
       setShowOrderForm(false);
     } catch (error) {
       console.error('Error adding order:', error);
-      // Here you might want to show an error message to the user
     }
   };
 
