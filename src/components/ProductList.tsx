@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Package, Edit, Trash, Plus, Trash2 } from 'lucide-react';
+import { Package, Edit, Trash, Plus } from 'lucide-react'; // Remove unused Trash2
 import type { Product } from '../types';
 import { ProductImport } from './ProductImport';
 import { useData } from '../contexts/DataContext';
@@ -31,26 +31,37 @@ export function ProductList() {
     e.preventDefault();
     if (!newProductName.trim()) return;
 
-    const newProduct = await databaseService.addProduct({
-      name: newProductName.trim()
-    });
+    try {
+      await databaseService.addProduct({
+        id: `product_${Date.now()}`, // Add required id field
+        name: newProductName.trim()
+      });
 
-    await refreshProducts();
-    setNewProductName('');
-    setShowAddForm(false);
+      await refreshProducts();
+      setNewProductName('');
+      setShowAddForm(false);
+    } catch (error) {
+      console.error('Error adding product:', error);
+    }
   };
 
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct || !newProductName.trim()) return;
 
-    await databaseService.updateProduct(editingProduct.id, { 
-      name: newProductName.trim() 
-    });
+    try {
+      const updatedProduct: Product = {
+        ...editingProduct,
+        name: newProductName.trim()
+      };
 
-    await refreshProducts();
-    setNewProductName('');
-    setEditingProduct(null);
+      await databaseService.addProduct(updatedProduct); // Replace existing product
+      await refreshProducts();
+      setNewProductName('');
+      setEditingProduct(null);
+    } catch (error) {
+      console.error('Error updating product:', error);
+    }
   };
 
   const handleDeleteProduct = async (id: string) => {

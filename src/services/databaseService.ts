@@ -78,13 +78,16 @@ export const databaseService = {
 
   async addProduct(product: Product): Promise<Product> {
     const products = await this.getProducts();
+    const existingIndex = products.findIndex(p => p.id === product.id);
     
-    // Check if product with this ID already exists
-    if (products.some(p => p.id === product.id)) {
-      throw new Error(`Product with ID ${product.id} already exists`);
+    if (existingIndex !== -1) {
+      // Update existing product
+      products[existingIndex] = product;
+    } else {
+      // Add new product
+      products.push(product);
     }
     
-    products.push(product);
     setStorageData(STORAGE_KEYS.PRODUCTS, products);
     return product;
   },
