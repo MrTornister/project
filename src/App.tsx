@@ -3,18 +3,16 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ClipboardList, Edit, Trash } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
-
 import { Dashboard } from './components/Dashboard';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
 import { KanbanBoard } from './components/KanbanBoard';
 import { Layout } from './components/Layout';
 import type { Order, Product } from './types';
-import { db } from './firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
 import { DataProvider } from './contexts/DataContext';
 import { Settings } from './pages/Settings';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { databaseService } from './services/databaseService';
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -26,20 +24,12 @@ export function LocalOrderList({ onNewOrder }: OrderListProps) {
 
   useEffect(() => {
     const fetchOrders = async () => {
-      const querySnapshot = await getDocs(collection(db, 'orders'));
-      const ordersList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Order[];
+      const ordersList = await databaseService.getOrders();
       setOrders(ordersList);
     };
 
     const fetchProducts = async () => {
-      const querySnapshot = await getDocs(collection(db, 'products'));
-      const productsList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
+      const productsList = await databaseService.getProducts();
       setProducts(productsList);
     };
 
@@ -126,7 +116,22 @@ export function LocalOrderList({ onNewOrder }: OrderListProps) {
                   id={`order-${order.id}`}
                   style={{ backgroundColor: "white", color: "black" }}
                   className="max-w-md shadow-lg border border-gray-200 rounded-lg"
-                  html={true}
+                  html={`
+                    <div class="p-2">
+                      <div class="font-bold mb-2">Products:</div>
+                      <ul class="list-disc pl-4 mb-2">
+                        ${order.products.map(({ productId, quantity }) => `
+                          <li>${getProductName(productId)} - ${quantity}</li>
+                        `).join('')}
+                      </ul>
+                      ${order.notes ? `
+                        <div>
+                          <div class="font-bold">Notes:</div>
+                          <div>${order.notes}</div>
+                        </div>
+                      ` : ''}
+                    </div>
+                  `}
                 />
               </React.Fragment>
             ))}
@@ -140,12 +145,12 @@ export function LocalOrderList({ onNewOrder }: OrderListProps) {
 function App() {
   return (
     <ErrorBoundary>
-      <DataProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={
-              <Layout>
-                <Suspense fallback={<div>Loading...</div>}>
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+        <DataProvider>
+          <Router>
+            <Routes>
+              <Route path="/" element={
+                <Layout>
                   <div className="min-h-screen bg-gray-50">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                       <Dashboard />
@@ -154,15 +159,15 @@ function App() {
                       </div>
                     </div>
                   </div>
-                </Suspense>
-              </Layout>
-            } />
-            <Route path="/products" element={<Products />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </Router>
-      </DataProvider>
+                </Layout>
+              } />
+              <Route path="/products" element={<Products />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </Router>
+        </DataProvider>
+      </Suspense>
     </ErrorBoundary>
   );
 }

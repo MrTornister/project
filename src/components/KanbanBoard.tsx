@@ -1,15 +1,24 @@
 import React from 'react';
 import { GripVertical } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
-import type { Order, Product } from '../types';
-import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import type { Order } from '../types';
+import { databaseService } from '../services/databaseService';
 
 export function KanbanBoard() {
-  const { orders, products } = useData();
+  const { orders, products, refreshOrders } = useData();
 
   const getProductName = (productId: string) => {
     const product = products.find(p => p.id === productId);
     return product ? product.name : 'Unknown Product';
+  };
+
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    try {
+      await databaseService.updateOrder(orderId, { status: newStatus });
+      await refreshOrders();
+    } catch (error) {
+      console.error('Error updating order status:', error);
+    }
   };
 
   const columns = [
@@ -27,7 +36,19 @@ export function KanbanBoard() {
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {columns.map((column) => (
-          <div key={column.id} className={`${column.color} rounded-lg p-4`}>
+          <div 
+            key={column.id} 
+            className={`${column.color} rounded-lg p-4`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }}
+            onDrop={async (e) => {
+              e.preventDefault();
+              const orderId = e.dataTransfer.getData('orderId');
+              await handleStatusChange(orderId, column.id);
+            }}
+          >
             <h4 className="font-medium text-gray-900 mb-4">
               {column.title} ({orders.filter(order => order.status === column.id).length})
             </h4>
@@ -37,7 +58,11 @@ export function KanbanBoard() {
                 .map((order) => (
                   <div
                     key={order.id}
-                    className="bg-white rounded-lg shadow p-4"
+                    className="bg-white rounded-lg shadow p-4 cursor-move"
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('orderId', order.id);
+                    }}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div>

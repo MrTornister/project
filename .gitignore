@@ -29,3 +29,6 @@ src/firebaseConfig.ts
 *.njsproj
 *.sln
 *.sw?
+
+#temporary dawnload files
+/server/downloads/

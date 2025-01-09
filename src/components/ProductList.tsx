@@ -1,19 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Package, Edit, Trash, Plus, Trash2 } from 'lucide-react';
 import type { Product } from '../types';
 import { ProductImport } from './ProductImport';
-import { db } from '../firebaseConfig';
-import { collection, getDocs, addDoc, deleteDoc, doc, writeBatch, updateDoc } from 'firebase/firestore';
+import { useData } from '../contexts/DataContext';
+import { databaseService } from '../services/databaseService';
 
 const ITEMS_PER_PAGE = 10;
 
 export function ProductList() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const { products, refreshProducts } = useData();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [newProductName, setNewProductName] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Calculate pagination values
   const filteredProducts = products.filter(product => 
@@ -26,29 +27,15 @@ export function ProductList() {
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const currentProducts = filteredProducts.slice(startIndex, endIndex);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const querySnapshot = await getDocs(collection(db, 'products'));
-      const productsList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
-      setProducts(productsList);
-    };
-
-    fetchProducts();
-  }, []);
-
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProductName.trim()) return;
 
-    const newProduct: Omit<Product, 'id'> = {
+    const newProduct = await databaseService.addProduct({
       name: newProductName.trim()
-    };
+    });
 
-    const docRef = await addDoc(collection(db, 'products'), newProduct);
-    setProducts([...products, { id: docRef.id, ...newProduct }]);
+    await refreshProducts();
     setNewProductName('');
     setShowAddForm(false);
   };
@@ -57,32 +44,37 @@ export function ProductList() {
     e.preventDefault();
     if (!editingProduct || !newProductName.trim()) return;
 
-    const productRef = doc(db, 'products', editingProduct.id);
-    await updateDoc(productRef, { name: newProductName.trim() });
+    await databaseService.updateProduct(editingProduct.id, { 
+      name: newProductName.trim() 
+    });
 
-    setProducts(products.map(p => 
-      p.id === editingProduct.id ? { ...p, name: newProductName.trim() } : p
-    ));
+    await refreshProducts();
     setNewProductName('');
     setEditingProduct(null);
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      await deleteDoc(doc(db, 'products', id));
-      setProducts(products.filter(p => p.id !== id));
+    try {
+      await databaseService.deleteProduct(id);
+      await refreshProducts();
+    } catch (error) {
+      console.error('Error deleting product:', error);
     }
   };
 
-  const handleDeleteAllProducts = async () => {
-    if (window.confirm('Are you sure you want to delete all products?')) {
-      const batch = writeBatch(db);
-      products.forEach(product => {
-        const productRef = doc(db, 'products', product.id);
-        batch.delete(productRef);
-      });
-      await batch.commit();
-      setProducts([]);
+  const handleDeleteAll = async () => {
+    if (!window.confirm('Are you sure you want to delete all products?')) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    try {
+      await databaseService.deleteAllProducts();
+      await refreshProducts();
+    } catch (error) {
+      console.error('Error deleting all products:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -113,11 +105,12 @@ export function ProductList() {
               Add Product
             </button>
             <button 
-              onClick={handleDeleteAllProducts}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 flex items-center gap-2"
+              onClick={handleDeleteAll}
+              disabled={isDeleting || products.length === 0}
+              className="px-4 py-2 text-white bg-red-600 rounded hover:bg-red-700 
+                   disabled:bg-red-300 disabled:cursor-not-allowed"
             >
-              <Trash2 className="h-4 w-4" />
-              Delete All Products
+              {isDeleting ? 'Deleting...' : 'Delete All Products'}
             </button>
           </div>
         </div>
@@ -164,13 +157,10 @@ export function ProductList() {
         
         <ProductImport 
           onImport={async (importedProducts) => {
-            const batch = writeBatch(db);
-            importedProducts.forEach(product => {
-              const productRef = doc(collection(db, 'products'));
-              batch.set(productRef, product);
-            });
-            await batch.commit();
-            setProducts([...products, ...importedProducts]);
+            for (const product of importedProducts) {
+              await databaseService.addProduct(product);
+            }
+            await refreshProducts();
           }} 
         />
       </div>

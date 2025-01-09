@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ClipboardList, Edit, Trash } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
-import type { Order, Product } from '../types';
+import type { Order } from '../types';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import Modal from 'react-modal';
 import { EditOrderForm } from './EditOrderForm';
-import { collection, getDocs, query, orderBy, limit, startAfter } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { databaseService } from '../services/databaseService';
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -16,27 +15,9 @@ interface OrderListProps {
 export function OrderList({ onNewOrder }: OrderListProps) {
   const { orders, products, refreshOrders } = useData();
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-  const [page, setPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
-
-  useEffect(() => {
-    const fetchOrders = async () => {
-      const ordersQuery = query(
-        collection(db, 'orders'),
-        orderBy('createdAt', 'desc'),
-        limit(ITEMS_PER_PAGE),
-        startAfter((page - 1) * ITEMS_PER_PAGE)
-      );
-      const querySnapshot = await getDocs(ordersQuery);
-      const ordersList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Order[];
-      setOrders(ordersList);
-    };
-
-    fetchOrders();
-  }, [page]);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const getProductName = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -51,13 +32,36 @@ export function OrderList({ onNewOrder }: OrderListProps) {
     setEditingOrder(null);
   };
 
-  const handleSubmitEdit = async (updatedOrder: Order) => {
-    await refreshOrders();
-    setEditingOrder(null);
+  const handleSubmitEdit = async () => {
+    try {
+      await refreshOrders(); // Refresh orders after update
+      setEditingOrder(null); // Close the modal
+    } catch (error) {
+      console.error('Error after updating order:', error);
+    }
   };
+
+  const handleDeleteOrder = async (id: string) => {
+    try {
+      setIsDeleting(id);
+      await databaseService.deleteOrder(id);
+      await refreshOrders();
+    } catch (error) {
+      console.error('Error deleting order:', error);
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
+  // Calculate pagination
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedOrders = orders.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(orders.length / ITEMS_PER_PAGE);
 
   return (
     <div className="bg-white shadow rounded-lg">
+      {/* Header section */}
       <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-900 flex items-center">
           <ClipboardList className="h-5 w-5 mr-2" />
@@ -70,6 +74,8 @@ export function OrderList({ onNewOrder }: OrderListProps) {
           New Order
         </button>
       </div>
+
+      {/* Table section */}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -82,7 +88,7 @@ export function OrderList({ onNewOrder }: OrderListProps) {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {orders.map((order) => (
+            {paginatedOrders.map((order) => (
               <React.Fragment key={order.id}>
                 <tr 
                   data-tooltip-id={`order-${order.id}`}
@@ -124,7 +130,11 @@ export function OrderList({ onNewOrder }: OrderListProps) {
                     >
                       <Edit className="h-4 w-4" />
                     </button>
-                    <button className="text-red-600 hover:text-red-900">
+                    <button 
+                      onClick={() => handleDeleteOrder(order.id)}
+                      disabled={isDeleting === order.id}
+                      className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                    >
                       <Trash className="h-4 w-4" />
                     </button>
                   </td>
@@ -141,19 +151,22 @@ export function OrderList({ onNewOrder }: OrderListProps) {
         </table>
       </div>
 
+      {/* Pagination controls */}
+      {/* ...existing pagination code... */}
+
       {/* Edit Order Modal */}
       {editingOrder && (
         <Modal
           isOpen={!!editingOrder}
           onRequestClose={handleCancelEdit}
           contentLabel="Edit Order"
-          className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[95vw] max-h-[90vh] overflow-y-auto"
-          overlayClassName="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+          className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full"
+          overlayClassName="fixed inset-0 bg-black bg-opacity-50"
         >
-          <EditOrderForm 
-            order={editingOrder} 
-            onSubmit={handleSubmitEdit} 
-            onCancel={handleCancelEdit} 
+          <EditOrderForm
+            orderId={editingOrder.id}
+            onSave={handleSubmitEdit}
+            onCancel={handleCancelEdit}
           />
         </Modal>
       )}

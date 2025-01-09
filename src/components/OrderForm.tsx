@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plus, X, Search } from 'lucide-react';
 import type { Product, Order } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
+import { useData } from '../contexts/DataContext';
 import { generateOrderNumber } from '../utils/orderNumber';
 
 interface OrderFormProps {
@@ -16,31 +15,17 @@ interface OrderProduct {
 }
 
 export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
+  const { products } = useData();
   const [clientName, setClientName] = useState('');
   const [projectName, setProjectName] = useState('');
   const [notes, setNotes] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<OrderProduct[]>([]);
   const [showProductSearch, setShowProductSearch] = useState(false);
 
-  // Fetch products from Firestore
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const querySnapshot = await getDocs(collection(db, 'products'));
-      const productsList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
-      setProducts(productsList);
-    };
-
-    fetchProducts();
-  }, []);
-
   // Filter products based on search term
-  useEffect(() => {
+  React.useEffect(() => {
     if (searchTerm.length >= 2) {
       const filtered = products.filter(product =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -76,23 +61,28 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
 
     try {
       const orderNumber = await generateOrderNumber();
+      const now = new Date();
 
-      const newOrder: Omit<Order, 'id' | 'createdAt' | 'updatedAt'> = {
+      const newOrder = {
         orderNumber,
         clientName,
         projectName,
-        status: 'pending',
+        status: 'pending' as const,
         products: selectedProducts.map(({ product, quantity }) => ({
           productId: product.id,
           quantity
         })),
         userId: '1',
-        notes
+        notes,
+        createdAt: now,
+        updatedAt: now
       };
 
+      // Usuwamy wywołanie databaseService.addOrder stąd,
+      // bo jest już obsługiwane w komponencie Orders
       onSubmit(newOrder);
     } catch (error) {
-      console.error('Error generating order number:', error);
+      console.error('Error creating order:', error);
     }
   };
 

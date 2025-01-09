@@ -14,6 +14,7 @@ export interface Product {
 
 export interface Order {
   id: string;
+  orderNumber: string;
   clientName: string;
   projectName: string;
   status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
@@ -21,13 +22,10 @@ export interface Order {
     productId: string;
     quantity: number;
   }>;
-  orderNumber: string;
   createdAt: Date;
   updatedAt: Date;
+  userId?: string; // Make userId optional since it might not be always required
   notes?: string;
-  confirmation?: string;
-  documentPZ?: string;
-  invoice?: string;
 }
 
 // Add this to existing types

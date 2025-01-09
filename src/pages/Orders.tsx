@@ -2,14 +2,13 @@ import { useState } from 'react';
 import { OrderList } from '../components/OrderList';
 import { Layout } from '../components/Layout';
 import { OrderForm } from '../components/OrderForm';
-import type { Order } from '../types';
-import { db } from '../firebaseConfig';
-import { collection, addDoc } from 'firebase/firestore';
+import type { Order } from '../types'; // Change import path to use index.ts
+import { databaseService } from '../services/databaseService';
 import { useData } from '../contexts/DataContext';
 
 export function Orders() {
   const [showOrderForm, setShowOrderForm] = useState(false);
-  const { refreshOrders } = useData();
+  const { refreshOrders } = useData(); // Use refreshOrders from context
 
   const handleNewOrder = () => {
     setShowOrderForm(true);
@@ -21,14 +20,9 @@ export function Orders() {
 
   const handleSubmitOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      const newOrder = {
-        ...order,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      await addDoc(collection(db, 'orders'), newOrder);
-      await refreshOrders();
+      const now = new Date();
+      await databaseService.addOrder({ ...order, createdAt: now, updatedAt: now });
+      await refreshOrders(); // Use refresh from context
       setShowOrderForm(false);
     } catch (error) {
       console.error('Error adding order:', error);
