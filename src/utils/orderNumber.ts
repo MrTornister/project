@@ -1,18 +1,27 @@
 import { databaseService } from '../services/databaseService';
 
 export async function generateOrderNumber(): Promise<string> {
-  const date = new Date();
-  const year = date.getFullYear().toString().slice(-2);
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  
-  // Get orders from local database
   const orders = await databaseService.getOrders();
-  const todaysOrders = orders.filter(order => {
-    const orderDate = new Date(order.createdAt);
-    return orderDate.getFullYear() === date.getFullYear() &&
-           orderDate.getMonth() === date.getMonth();
-  });
+  const today = new Date();
+  const year = today.getFullYear().toString().slice(-2);
+  const month = (today.getMonth() + 1).toString().padStart(2, '0');
   
-  const sequential = (todaysOrders.length + 1).toString().padStart(3, '0');
-  return `${year}${month}-${sequential}`;
+  // Filtruj zamówienia z tego miesiąca
+  const currentMonthOrders = orders.filter(order => {
+    return order.orderNumber.startsWith(`ZAM/${year}/${month}`);
+  });
+
+  // Znajdź najwyższy numer
+  let maxNumber = 0;
+  currentMonthOrders.forEach(order => {
+    const orderNum = parseInt(order.orderNumber.split('/').pop() || '0');
+    maxNumber = Math.max(maxNumber, orderNum);
+  });
+
+  // Nowy numer zamówienia
+  const nextNumber = (maxNumber + 1).toString().padStart(3, '0');
+  const orderNumber = `ZAM/${year}/${month}/${nextNumber}`;
+
+  console.log('Generated order number:', orderNumber); // Debug log
+  return orderNumber;
 }

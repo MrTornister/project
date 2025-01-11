@@ -1,142 +1,136 @@
-import type { Order, Product } from '../types';
+import type { Order, Product } from '../types/index.js';
 
-// Remove unused imports and fix duplicate type imports
-
-const STORAGE_KEYS = {
-  ORDERS: 'workflow_orders',
-  PRODUCTS: 'workflow_products',
-};
-
-// Helper do parsowania danych z localStorage
-const getStorageData = <T>(key: string): T[] => {
-  try {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : [];
-  } catch (error) {
-    console.error(`Error reading from localStorage (${key}):`, error);
-    return [];
-  }
-};
-
-// Helper do zapisywania danych w localStorage
-const setStorageData = <T>(key: string, data: T[]): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (error) {
-    console.error(`Error writing to localStorage (${key}):`, error);
-  }
-};
+const API_URL = 'http://localhost:3001/api';
 
 export const databaseService = {
-  // Orders
   async getOrders(): Promise<Order[]> {
-    console.log('Fetching orders from storage...');
-    return getStorageData<Order>(STORAGE_KEYS.ORDERS);
+    const response = await fetch(`${API_URL}/orders`);
+    const data = await response.json() as Order[];
+    return data.map((order) => ({
+      ...order,
+      createdAt: new Date(order.createdAt),
+      updatedAt: new Date(order.updatedAt)
+    }));
   },
 
   async addOrder(order: Omit<Order, 'id'>): Promise<Order> {
-    const orders = await this.getOrders();
-    const newOrder = {
-      ...order,
-      id: `order_${Date.now()}`,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    orders.push(newOrder);
-    setStorageData(STORAGE_KEYS.ORDERS, orders);
-    return newOrder;
+    const response = await fetch(`${API_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(order)
+    });
+    return await response.json() as Order;
   },
 
   async deleteOrder(id: string): Promise<void> {
-    const orders = await this.getOrders();
-    const filteredOrders = orders.filter(order => order.id !== id);
-    setStorageData(STORAGE_KEYS.ORDERS, filteredOrders);
+    const response = await fetch(`${API_URL}/orders/${id}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      throw new Error('Failed to delete order');
+    }
+  },
+
+  async deleteAllOrders(): Promise<void> {
+    const response = await fetch(`${API_URL}/orders`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      throw new Error('Failed to delete all orders');
+    }
   },
 
   async getOrder(id: string): Promise<Order | null> {
-    const orders = await this.getOrders();
-    return orders.find(order => order.id === id) || null;
+    const response = await fetch(`/api/orders/${id}`);
+    if (!response.ok) return null;
+    const order = await response.json() as Order;
+    return order;
   },
 
   async updateOrder(id: string, updatedOrder: Order): Promise<void> {
-    const orders = await this.getOrders();
-    const index = orders.findIndex(order => order.id === id);
-    if (index !== -1) {
-      orders[index] = {
+    const response = await fetch(`${API_URL}/orders/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         ...updatedOrder,
-        updatedAt: new Date()
-      };
-      setStorageData(STORAGE_KEYS.ORDERS, orders);
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Server error:', error);
+      throw new Error('Failed to update order');
     }
   },
 
-  // Products
   async getProducts(): Promise<Product[]> {
-    console.log('Fetching products from storage...');
-    return getStorageData<Product>(STORAGE_KEYS.PRODUCTS);
+    const response = await fetch(`${API_URL}/products`);
+    const products = await response.json() as Product[];
+    return products;
   },
 
   async addProduct(product: Product): Promise<Product> {
-    const products = await this.getProducts();
-    const existingIndex = products.findIndex(p => p.id === product.id);
-    
-    if (existingIndex !== -1) {
-      // Update existing product
-      products[existingIndex] = product;
-    } else {
-      // Add new product
-      products.push(product);
-    }
-    
-    setStorageData(STORAGE_KEYS.PRODUCTS, products);
-    return product;
+    const response = await fetch(`${API_URL}/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product)
+    });
+    return await response.json() as Product;
   },
 
   async deleteProduct(id: string): Promise<void> {
-    const products = await this.getProducts();
-    const filteredProducts = products.filter(product => product.id !== id);
-    setStorageData(STORAGE_KEYS.PRODUCTS, filteredProducts);
+    const response = await fetch(`${API_URL}/products/${id}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      throw new Error('Failed to delete product');
+    }
   },
 
   async deleteAllProducts(): Promise<void> {
-    setStorageData(STORAGE_KEYS.PRODUCTS, []);
+    const response = await fetch(`${API_URL}/products`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      throw new Error('Failed to delete all products');
+    }
   },
 
-  // Inicjalizacja przykładowych danych
-  async initializeDefaultData() {
-    console.log('Initializing default data...');
+  async createOrder(orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Promise<Order> {
+    console.log('Creating order:', orderData); // Debug log
     
-    // Sprawdź czy dane już istnieją
-    const existingOrders = await this.getOrders();
-    const existingProducts = await this.getProducts();
+    const response = await fetch(`${API_URL}/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...orderData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    });
 
-    if (existingOrders.length === 0 && existingProducts.length === 0) {
-      // Przykładowe produkty
-      const defaultProducts = [
-        { id: 'product_1', name: 'Product 1', description: 'Description 1' },
-        { id: 'product_2', name: 'Product 2', description: 'Description 2' },
-      ];
-
-      // Przykładowe zamówienia
-      const defaultOrders = [
-        {
-          id: 'order_1',
-          clientName: 'Test Client',
-          projectName: 'Test Project',
-          status: 'pending',
-          products: [{ productId: 'product_1', quantity: 1 }],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      setStorageData(STORAGE_KEYS.PRODUCTS, defaultProducts);
-      setStorageData(STORAGE_KEYS.ORDERS, defaultOrders);
-      
-      console.log('Default data initialized');
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Server error:', error);
+      throw new Error('Failed to create order');
     }
+
+    return response.json();
   }
 };
 
-// Initialize data on first import
-databaseService.initializeDefaultData().catch(console.error);
+export async function getOrder(id: string) {
+  const response = await fetch(`${API_URL}/orders/${id}`);
+  if (!response.ok) {
+    console.error('Failed to load order:', response.status, await response.text());
+    return null;
+  }
+  const order = await response.json();
+  console.log('Loaded order:', order); // Add debugging
+  return order;
+}

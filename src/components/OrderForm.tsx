@@ -23,6 +23,8 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<OrderProduct[]>([]);
   const [showProductSearch, setShowProductSearch] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Filter products based on search term
   React.useEffect(() => {
@@ -58,11 +60,19 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Form submission started'); // Debug log
+
+    if (selectedProducts.length === 0) {
+      setError('Please add at least one product');
+      return;
+    }
 
     try {
+      setIsSubmitting(true);
+      setError(null);
       const orderNumber = await generateOrderNumber();
-      const now = new Date();
-
+      console.log('Generated order number:', orderNumber); // Debug log
+      
       const newOrder = {
         orderNumber,
         clientName,
@@ -72,17 +82,18 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
           productId: product.id,
           quantity
         })),
-        userId: '1',
         notes,
-        createdAt: now,
-        updatedAt: now
+        userId: '1', // Możesz dostosować to pole według potrzeb
       };
 
-      // Usuwamy wywołanie databaseService.addOrder stąd,
-      // bo jest już obsługiwane w komponencie Orders
-      onSubmit(newOrder);
+      console.log('Submitting order:', newOrder); // Debug log
+      await onSubmit(newOrder);
+      console.log('Order submitted successfully'); // Debug log
     } catch (error) {
       console.error('Error creating order:', error);
+      setError('Failed to create order. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -208,20 +219,29 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
             />
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
+              {error}
+            </div>
+          )}
+
           {/* Form Actions */}
           <div className="flex justify-end gap-3">
             <button
               type="button"
               onClick={onCancel}
+              disabled={isSubmitting}
               className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Cancel
             </button>
             <button
               type="submit"
+              disabled={isSubmitting}
               className="bg-indigo-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700"
             >
-              Create Order
+              {isSubmitting ? 'Creating...' : 'Create Order'}
             </button>
           </div>
         </div>

@@ -65,9 +65,13 @@ export function ProductList() {
   };
 
   const handleDeleteProduct = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) {
+      return;
+    }
+
     try {
       await databaseService.deleteProduct(id);
-      await refreshProducts();
+      await refreshProducts(); // Refresh products after deletion
     } catch (error) {
       console.error('Error deleting product:', error);
     }
@@ -81,7 +85,7 @@ export function ProductList() {
     setIsDeleting(true);
     try {
       await databaseService.deleteAllProducts();
-      await refreshProducts();
+      await refreshProducts(); // Refresh products after deletion
     } catch (error) {
       console.error('Error deleting all products:', error);
     } finally {

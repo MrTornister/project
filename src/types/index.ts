@@ -24,7 +24,7 @@ export interface Order {
   }>;
   createdAt: Date;
   updatedAt: Date;
-  userId?: string; // Make userId optional since it might not be always required
+  userId: string;
   notes?: string;
 }
 
