@@ -47,22 +47,39 @@ export const databaseService = {
     return order;
   },
 
-  async updateOrder(id: string, updatedOrder: Order): Promise<void> {
-    const response = await fetch(`${API_URL}/orders/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ...updatedOrder,
-        updatedAt: new Date().toISOString(),
-      }),
+  async updateOrder(id: string, order: Order): Promise<Order> {
+    console.log('DatabaseService.updateOrder called with:', {
+        id,
+        orderDetails: {
+            clientName: order.clientName,
+            projectName: order.projectName,
+            status: order.status,
+            productsCount: order.products?.length
+        }
     });
+    
+    try {
+        const response = await fetch(`${API_URL}/orders/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(order)
+        });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Server error:', error);
-      throw new Error('Failed to update order');
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error('Server error:', errorData);
+            throw new Error(`Failed to update order: ${errorData}`);
+        }
+
+        const updatedOrder = await response.json();
+        console.log('Updated order received:', updatedOrder);
+        return updatedOrder;
+        
+    } catch (error) {
+        console.error('Error in updateOrder:', error);
+        throw error;
     }
   },
 

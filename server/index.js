@@ -26,6 +26,20 @@ async function initDatabase() {
         db.on('error', (err) => {
             console.error('Database error:', err);
         });
+
+        // Add these columns to your CREATE TABLE statement or alter the existing table
+        await db.run(`
+            ALTER TABLE orders 
+            ADD COLUMN pzDocumentLink TEXT,
+            ADD COLUMN invoiceLink TEXT
+        `);
+
+        // Add new columns to orders table
+        await db.run(`
+            ALTER TABLE orders 
+            ADD COLUMN pzAddedAt TEXT,
+            ADD COLUMN invoiceAddedAt TEXT
+        `);
     }
     return db;
 }
@@ -198,6 +212,103 @@ app.get('/api/orders/:id', async (req, res) => {
     } catch (error) {
         console.error('Error fetching order:', error);
         res.status(500).json({ error: 'Failed to fetch order' });
+    }
+});
+
+// Add PUT endpoint for updating orders
+app.put('/api/orders/:id', async (req, res) => {
+    console.log('Received PUT request for order:', req.params.id);
+    console.log('Request body:', req.body);
+    
+    try {
+        const db = await initDatabase();
+        const { id } = req.params;
+        const order = req.body;
+
+        // Sprawdź dane wejściowe
+        console.log('Validating input data:', {
+            hasId: !!id,
+            hasClientName: !!order.clientName,
+            hasProjectName: !!order.projectName,
+            hasStatus: !!order.status,
+            hasProducts: Array.isArray(order.products)
+        });
+
+        await db.run('BEGIN TRANSACTION');
+        
+        try {
+            const existingOrder = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+            console.log('Existing order found:', existingOrder);
+            
+            // Sprawdź czy zamówienie istnieje
+            if (!existingOrder) {
+                await db.run('ROLLBACK');
+                return res.status(404).json({ error: 'Order not found' });
+            }
+
+            // Aktualizuj główne dane zamówienia
+            await db.run(`
+                UPDATE orders 
+                SET clientName = ?,
+                    projectName = ?,
+                    status = ?,
+                    notes = ?,
+                    pzDocumentLink = ?,
+                    invoiceLink = ?,
+                    pzAddedAt = CASE 
+                        WHEN pzDocumentLink IS NULL AND ? IS NOT NULL 
+                        THEN datetime('now') 
+                        ELSE pzAddedAt 
+                    END,
+                    invoiceAddedAt = CASE 
+                        WHEN invoiceLink IS NULL AND ? IS NOT NULL 
+                        THEN datetime('now') 
+                        ELSE invoiceAddedAt 
+                    END,
+                    updatedAt = datetime('now')
+                WHERE id = ?
+            `, [
+                order.clientName,
+                order.projectName,
+                order.status,
+                order.notes || null,
+                order.pzDocumentLink || null,
+                order.invoiceLink || null,
+                order.pzDocumentLink || null,
+                order.invoiceLink || null,
+                id
+            ]);
+
+            // Usuń stare produkty
+            await db.run('DELETE FROM order_products WHERE orderId = ?', [id]);
+
+            // Dodaj nowe produkty
+            for (const product of order.products) {
+                await db.run(`
+                    INSERT INTO order_products (orderId, productId, quantity)
+                    VALUES (?, ?, ?)
+                `, [id, product.productId, product.quantity]);
+            }
+
+            await db.run('COMMIT');
+
+            // Pobierz zaktualizowane dane
+            const updatedOrder = await db.get(`
+                SELECT orders.*, GROUP_CONCAT(order_products.productId || ':' || order_products.quantity) as products
+                FROM orders
+                LEFT JOIN order_products ON orders.id = order_products.orderId
+                WHERE orders.id = ?
+                GROUP BY orders.id
+            `, [id]);
+
+            res.json(updatedOrder);
+        } catch (error) {
+            await db.run('ROLLBACK');
+            throw error;
+        }
+    } catch (error) {
+        console.error('Error updating order:', error);
+        res.status(500).json({ error: 'Failed to update order' });
     }
 });
 

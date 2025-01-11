@@ -4,11 +4,10 @@ import { OrderForm } from '../components/OrderForm';
 import type { Order } from '../types';
 import { databaseService } from '../services/databaseService';
 import { useData } from '../contexts/DataContext';
-import { ClipboardList, Edit, Trash, AlertTriangle, Search, ArrowUpDown, Eye } from 'lucide-react';
+import { Edit, Trash, Search, ArrowUpDown, Eye } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import { EditOrderForm } from '../components/EditOrderForm';
-import Modal from 'react-modal';
 
 type SortField = 'orderNumber' | 'clientName' | 'projectName' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -37,6 +36,19 @@ export function Orders() {
 
   const handleEdit = (order: Order) => {
     setEditingOrder(order);
+  };
+
+  const handleUpdateOrder = async (orderId: string, updatedOrder: Order) => {
+    try {
+      console.log('Updating order in Orders component:', { orderId, updatedOrder }); // Debug log
+      const result = await databaseService.updateOrder(orderId, updatedOrder);
+      console.log('Update result:', result); // Debug log
+      await refreshOrders();
+      setEditingOrder(null);
+    } catch (error) {
+      console.error('Error in handleUpdateOrder:', error);
+      throw error instanceof Error ? error : new Error('Failed to update order');
+    }
   };
 
   return (
@@ -71,9 +83,12 @@ export function Orders() {
             <EditOrderForm
               order={editingOrder}
               onSave={async (updatedOrder) => {
-                await databaseService.updateOrder(editingOrder.id, updatedOrder);
-                await refreshOrders();
-                setEditingOrder(null);
+                try {
+                  await handleUpdateOrder(editingOrder.id, updatedOrder);
+                } catch (error) {
+                  console.error('Error in onSave callback:', error);
+                  throw error;
+                }
               }}
               onCancel={() => setEditingOrder(null)}
             />
@@ -91,7 +106,7 @@ export function Orders() {
   );
 }
 
-export function OrderList({ onNewOrder, onEdit }: OrderListProps) {
+export function OrderList({ onEdit }: OrderListProps) {
   const { orders, products, refreshOrders } = useData();
   const [sortField, setSortField] = useState<SortField>('orderNumber');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -494,13 +509,4 @@ export function OrderList({ onNewOrder, onEdit }: OrderListProps) {
 }
 
 // Ensure the databaseService.getOrder method is properly implemented
-async function getOrder(id: string): Promise<Order | null> {
-  const response = await fetch(`${API_URL}/orders/${id}`);
-  if (!response.ok) return null;
-  const order = await response.json() as Order;
-  return {
-    ...order,
-    createdAt: new Date(order.createdAt),
-    updatedAt: new Date(order.updatedAt)
-  };
-}
+

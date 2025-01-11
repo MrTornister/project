@@ -56,7 +56,7 @@ async function generateOrders() {
       }
 
       const orderNumber = await generateOrderNumber(i);
-      const now = new Date().toISOString(); // Convert to ISO string
+      const now = new Date(); // Use Date object directly
 
       const order: Omit<OrderType, 'id'> = {
         orderNumber,
@@ -66,8 +66,8 @@ async function generateOrders() {
         products: selectedProducts,
         userId: '1',
         notes,
-        createdAt: now,  // Use ISO string
-        updatedAt: now   // Use ISO string
+        createdAt: now,  // Use Date object
+        updatedAt: now   // Use Date object
       };
 
       await databaseService.addOrder(order);

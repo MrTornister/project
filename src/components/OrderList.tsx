@@ -5,7 +5,6 @@ import type { Order } from '../types';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import Modal from 'react-modal';
-import { EditOrderForm } from './EditOrderForm';
 import { databaseService } from '../services/databaseService';
 
 Modal.setAppElement('#root');
@@ -16,7 +15,7 @@ interface OrderListProps {
 
 export function OrderList({ onNewOrder }: OrderListProps) {
   const { orders, products, refreshOrders } = useData();
-  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [, setEditingOrder] = useState<Order | null>(null);
   const [currentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -31,18 +30,7 @@ export function OrderList({ onNewOrder }: OrderListProps) {
     setEditingOrder(order);
   };
 
-  const handleCancelEdit = () => {
-    setEditingOrder(null);
-  };
 
-  const handleSubmitEdit = async () => {
-    try {
-      await refreshOrders(); // Refresh orders after update
-      setEditingOrder(null); // Close the modal
-    } catch (error) {
-      console.error('Error after updating order:', error);
-    }
-  };
 
   const handleDeleteOrder = async (id: string) => {
     console.log(`Attempting to delete order with id: ${id}`);

@@ -18,17 +18,20 @@ export interface Order {
   clientName: string;
   projectName: string;
   status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
+  notes?: string;
+  pzDocumentLink?: string;
+  invoiceLink?: string;
   products: Array<{
     productId: string;
     quantity: number;
   }>;
   createdAt: Date;
   updatedAt: Date;
+  pzAddedAt?: Date;    // New field
+  invoiceAddedAt?: Date; // New field
   userId: string;
-  notes?: string;
 }
 
-// Add this to existing types
 export interface EmailData {
   id: string;
   sender_name: string;

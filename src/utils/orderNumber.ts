@@ -1,6 +1,6 @@
 import { databaseService } from '../services/databaseService';
 
-export async function generateOrderNumber(): Promise<string> {
+export async function generateOrderNumber(p0: number): Promise<string> {
   const orders = await databaseService.getOrders();
   const today = new Date();
   const year = today.getFullYear().toString().slice(-2);

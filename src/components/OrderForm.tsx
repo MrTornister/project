@@ -70,7 +70,7 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
     try {
       setIsSubmitting(true);
       setError(null);
-      const orderNumber = await generateOrderNumber();
+      const orderNumber = await generateOrderNumber(1);
       console.log('Generated order number:', orderNumber); // Debug log
       
       const newOrder = {
