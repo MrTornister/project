@@ -9,7 +9,7 @@
 
     /* Bundler mode */
     "moduleResolution": "node",
-    "allowImportingTsExtensions": true,
+    "noEmit": false, // Change this to false
     "isolatedModules": true,
     "moduleDetection": "force",
     "jsx": "react-jsx",
@@ -24,5 +24,11 @@
     "outDir": "./dist/app",
     "rootDir": "./src"
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "files": [
+    "src/main.tsx"
+  ]
 }

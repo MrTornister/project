@@ -1,25 +1,53 @@
-import type { Order, Product } from '../types/index.js';
+import type { OrderStatus, Product } from '../types/index.js';
+
+export interface LocalOrder {
+  id: string;
+  orderNumber: string;
+  clientName: string;
+  projectName: string;
+  status: OrderStatus;
+  notes?: string;
+  pzDocumentLink?: string;
+  invoiceLink?: string;
+  pzAddedAt?: Date;
+  invoiceAddedAt?: Date;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+  products: Array<{
+    productId: string;
+    quantity: number;
+  }>;
+}
 
 const API_URL = 'http://localhost:3001/api';
 
 export const databaseService = {
-  async getOrders(): Promise<Order[]> {
+  async getOrders(): Promise<LocalOrder[]> {
     const response = await fetch(`${API_URL}/orders`);
-    const data = await response.json() as Order[];
-    return data.map((order) => ({
-      ...order,
-      createdAt: new Date(order.createdAt),
-      updatedAt: new Date(order.updatedAt)
-    }));
+    if (!response.ok) {
+      throw new Error('Failed to fetch orders');
+    }
+    const orders = await response.json();
+    return orders;
   },
 
-  async addOrder(order: Omit<Order, 'id'>): Promise<Order> {
+  async addOrder(order: Omit<LocalOrder, 'id'>): Promise<LocalOrder> {
+    console.log('Sending order with products:', order.products); // Debug log
+    
     const response = await fetch(`${API_URL}/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order)
     });
-    return await response.json() as Order;
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Server error:', errorText);
+      throw new Error('Failed to create order');
+    }
+
+    return await response.json();
   },
 
   async deleteOrder(id: string): Promise<void> {
@@ -40,53 +68,67 @@ export const databaseService = {
     }
   },
 
-  async getOrder(id: string): Promise<Order | null> {
-    const response = await fetch(`/api/orders/${id}`);
-    if (!response.ok) return null;
-    const order = await response.json() as Order;
+  async getOrder(id: string): Promise<LocalOrder | null> {
+    const response = await fetch(`${API_URL}/orders/${id}`);
+    if (!response.ok) {
+      console.error('Failed to load order:', response.status, await response.text());
+      return null;
+    }
+    const order = await response.json();
+    console.log('Loaded order:', order);
     return order;
   },
 
-  async updateOrder(id: string, order: Order): Promise<Order> {
-    console.log('DatabaseService.updateOrder called with:', {
-        id,
-        orderDetails: {
-            clientName: order.clientName,
-            projectName: order.projectName,
-            status: order.status,
-            productsCount: order.products?.length
-        }
-    });
-    
+  async updateOrder(id: string, order: LocalOrder): Promise<LocalOrder> {
     try {
-        const response = await fetch(`${API_URL}/orders/${id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(order)
-        });
+      const orderToUpdate = {
+        ...order,
+        updatedAt: new Date().toISOString(),
+        pzDocumentLink: order.pzDocumentLink || null,
+        invoiceLink: order.invoiceLink || null,
+        pzAddedAt: order.pzAddedAt ? new Date(order.pzAddedAt).toISOString() : null,
+        invoiceAddedAt: order.invoiceAddedAt ? new Date(order.invoiceAddedAt).toISOString() : null,
+        notes: order.notes || null
+      };
 
-        if (!response.ok) {
-            const errorData = await response.text();
-            console.error('Server error:', errorData);
-            throw new Error(`Failed to update order: ${errorData}`);
-        }
+      const response = await fetch(`${API_URL}/orders/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(orderToUpdate)
+      });
 
-        const updatedOrder = await response.json();
-        console.log('Updated order received:', updatedOrder);
-        return updatedOrder;
-        
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error response:', errorText);
+        throw new Error(`Failed to update order: ${errorText}`);
+      }
+
+      const updatedOrder = await response.json();
+      return {
+        ...updatedOrder,
+        pzAddedAt: updatedOrder.pzAddedAt ? new Date(updatedOrder.pzAddedAt) : undefined,
+        invoiceAddedAt: updatedOrder.invoiceAddedAt ? new Date(updatedOrder.invoiceAddedAt) : undefined
+      };
     } catch (error) {
-        console.error('Error in updateOrder:', error);
-        throw error;
+      console.error('Error updating order:', error);
+      throw error;
     }
   },
 
   async getProducts(): Promise<Product[]> {
-    const response = await fetch(`${API_URL}/products`);
-    const products = await response.json() as Product[];
-    return products;
+    try {
+      const response = await fetch(`${API_URL}/products`);
+      if (!response.ok) {
+        console.error('Failed to fetch products:', await response.text());
+        return [];
+      }
+      return await response.json() as Product[];
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      return [];
+    }
   },
 
   async addProduct(product: Product): Promise<Product> {
@@ -116,19 +158,24 @@ export const databaseService = {
     }
   },
 
-  async createOrder(orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Promise<Order> {
-    console.log('Creating order:', orderData); // Debug log
-    
+  async createOrder(orderData: Omit<LocalOrder, 'id' | 'createdAt' | 'updatedAt'>): Promise<LocalOrder> {
+    const orderToCreate = {
+      ...orderData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pzDocumentLink: orderData.pzDocumentLink || null,
+      invoiceLink: orderData.invoiceLink || null,
+      pzAddedAt: orderData.pzAddedAt ? new Date(orderData.pzAddedAt).toISOString() : null,
+      invoiceAddedAt: orderData.invoiceAddedAt ? new Date(orderData.invoiceAddedAt).toISOString() : null,
+      notes: orderData.notes || null
+    };
+
     const response = await fetch(`${API_URL}/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        ...orderData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }),
+      body: JSON.stringify(orderToCreate)
     });
 
     if (!response.ok) {
@@ -137,11 +184,16 @@ export const databaseService = {
       throw new Error('Failed to create order');
     }
 
-    return response.json();
+    const createdOrder = await response.json();
+    return {
+      ...createdOrder,
+      pzAddedAt: createdOrder.pzAddedAt ? new Date(createdOrder.pzAddedAt) : undefined,
+      invoiceAddedAt: createdOrder.invoiceAddedAt ? new Date(createdOrder.invoiceAddedAt) : undefined
+    };
   }
 };
 
-export async function getOrder(id: string) {
+export async function getOrder(id: string): Promise<LocalOrder | null> {
   const response = await fetch(`${API_URL}/orders/${id}`);
   if (!response.ok) {
     console.error('Failed to load order:', response.status, await response.text());
@@ -150,4 +202,18 @@ export async function getOrder(id: string) {
   const order = await response.json();
   console.log('Loaded order:', order); // Add debugging
   return order;
+}
+
+export async function resetDatabase() {
+  try {
+    const response = await fetch(`${API_URL}/reset-database`, {
+      method: 'POST'
+    });
+    if (!response.ok) {
+      throw new Error('Failed to reset database');
+    }
+  } catch (error) {
+    console.error('Error resetting database:', error);
+    throw error;
+  }
 }

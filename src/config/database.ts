@@ -28,20 +28,24 @@ export async function initDatabase() {
 
             CREATE TABLE IF NOT EXISTS orders (
                 id TEXT PRIMARY KEY,
-                orderNumber TEXT NOT NULL,
-                clientName TEXT NOT NULL,
-                projectName TEXT NOT NULL,
-                status TEXT NOT NULL,
+                orderNumber TEXT UNIQUE,
+                clientName TEXT,
+                projectName TEXT,
+                status TEXT,
                 notes TEXT,
+                pzDocumentLink TEXT,
+                invoiceLink TEXT,
+                pzAddedAt TEXT,
+                invoiceAddedAt TEXT,
                 userId TEXT,
-                createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+                createdAt TEXT,
+                updatedAt TEXT
             );
 
             CREATE TABLE IF NOT EXISTS order_products (
                 orderId TEXT,
                 productId TEXT,
-                quantity INTEGER NOT NULL,
+                quantity INTEGER,
                 FOREIGN KEY (orderId) REFERENCES orders(id),
                 FOREIGN KEY (productId) REFERENCES products(id),
                 PRIMARY KEY (orderId, productId)

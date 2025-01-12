@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Layout } from '../components/Layout';
 import { OrderForm } from '../components/OrderForm';
 import type { Order } from '../types';
@@ -9,8 +9,9 @@ import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import { EditOrderForm } from '../components/EditOrderForm';
 
-type SortField = 'orderNumber' | 'clientName' | 'projectName' | 'status';
+type SortField = 'orderNumber' | 'clientName' | 'projectName' | 'status' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
+type OrderStatus = 'new' | 'shipped' | 'delivered' | 'completed';
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -24,13 +25,17 @@ export function Orders() {
 
   const handleSubmit = async (orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      console.log('Handling order submission:', orderData); // Debug log
-      await databaseService.createOrder(orderData);
+      console.log('Orders component received order data:', orderData);
+      console.log('PZ Document Link in Orders:', orderData.pzDocumentLink);
+      
+      const result = await databaseService.createOrder(orderData);
+      console.log('Create order result:', result);
+      
       await refreshOrders();
       setIsCreating(false);
     } catch (error) {
       console.error('Error in handleSubmit:', error);
-      throw error; // Re-throw to be handled by the form
+      throw error;
     }
   };
 
@@ -40,14 +45,24 @@ export function Orders() {
 
   const handleUpdateOrder = async (orderId: string, updatedOrder: Order) => {
     try {
-      console.log('Updating order in Orders component:', { orderId, updatedOrder }); // Debug log
+      console.log('Updating order in Orders component:', { 
+        orderId, 
+        updatedOrder,
+        pzDocumentLink: updatedOrder.pzDocumentLink 
+      });
+
       const result = await databaseService.updateOrder(orderId, updatedOrder);
-      console.log('Update result:', result); // Debug log
+      console.log('Update result:', result);
+
+      if (!result) {
+        throw new Error('Failed to update order - no response from server');
+      }
+
       await refreshOrders();
       setEditingOrder(null);
     } catch (error) {
-      console.error('Error in handleUpdateOrder:', error);
-      throw error instanceof Error ? error : new Error('Failed to update order');
+      console.error('Error updating order:', error);
+      alert('Failed to update order. Please check console for details.');
     }
   };
 
@@ -107,7 +122,7 @@ export function Orders() {
 }
 
 export function OrderList({ onEdit }: OrderListProps) {
-  const { orders, products, refreshOrders } = useData();
+  const { orders = [], products = [], refreshOrders, isLoading } = useData(); // Ensure orders and products are initialized as empty arrays
   const [sortField, setSortField] = useState<SortField>('orderNumber');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [searchTerm, setSearchTerm] = useState('');
@@ -118,13 +133,76 @@ export function OrderList({ onEdit }: OrderListProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const getProductName = (productId: string): string => {
+  const getProductName = useCallback((productId: string): string => {
     const product = products.find(p => p.id === productId);
     return product ? product.name : 'Unknown Product';
-  };
+  }, [products]);
+
+  const filteredAndSortedOrders = useMemo(() => {
+    return orders
+      .filter(order => {
+        if (clientFilter && !order.clientName.toLowerCase().includes(clientFilter.toLowerCase())) {
+          return false;
+        }
+        if (projectFilter && !order.projectName.toLowerCase().includes(projectFilter.toLowerCase())) {
+          return false;
+        }
+        if (statusFilter && order.status !== statusFilter) {
+          return false;
+        }
+        if (searchTerm) {
+          return order.products.some(p => {
+            const productNameValue = getProductName(p.productId);
+            return productNameValue.toLowerCase().includes(searchTerm.toLowerCase());
+          });
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        switch (sortField) {
+          case 'orderNumber':
+            return sortDirection === 'asc' 
+              ? a.orderNumber.localeCompare(b.orderNumber)
+              : b.orderNumber.localeCompare(a.orderNumber);
+          case 'clientName':
+            return sortDirection === 'asc'
+              ? a.clientName.localeCompare(b.clientName)
+              : b.clientName.localeCompare(a.clientName);
+          case 'projectName':
+            return sortDirection === 'asc'
+              ? a.projectName.localeCompare(b.projectName)
+              : b.projectName.localeCompare(a.projectName);
+          case 'status':
+            return sortDirection === 'asc'
+              ? a.status.localeCompare(b.status)
+              : b.status.localeCompare(a.status);
+          case 'createdAt':
+            return sortDirection === 'asc'
+              ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          default:
+            return 0;
+        }
+      });
+  }, [orders, products, sortField, sortDirection, searchTerm, clientFilter, projectFilter, statusFilter, getProductName]);
+
+  // Calculate pagination values
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedOrders = useMemo(() => {
+    return filteredAndSortedOrders.slice(startIndex, endIndex);
+  }, [filteredAndSortedOrders, startIndex, endIndex]);
+
+  const totalPages = Math.ceil(filteredAndSortedOrders.length / itemsPerPage);
+
+  useEffect(() => {
+    if (!orders.length || !products.length) {
+      return;
+    }
+  }, [orders, products]);
 
   const handleEditOrder = (order: Order) => {
-    onEdit(order); // Call the onEdit prop passed from parent
+    onEdit(order);
   };
 
   const handleDeleteOrder = async (id: string) => {
@@ -143,62 +221,21 @@ export function OrderList({ onEdit }: OrderListProps) {
     }
   };
 
-  const filteredAndSortedOrders = useMemo(() => {
-    let result = [...orders];
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <div className="text-gray-500">Loading orders...</div>
+      </div>
+    );
+  }
 
-    if (clientFilter) {
-      result = result.filter(order => 
-        order.clientName.toLowerCase().includes(clientFilter.toLowerCase())
-      );
-    }
-
-    if (projectFilter) {
-      result = result.filter(order => 
-        order.projectName.toLowerCase().includes(projectFilter.toLowerCase())
-      );
-    }
-
-    if (statusFilter) {
-      result = result.filter(order => order.status === statusFilter);
-    }
-
-    if (searchTerm) {
-      result = result.filter(order => {
-        return order.products.some(p => {
-          const productNameValue = getProductName(p.productId);
-          return productNameValue.toLowerCase().includes(searchTerm.toLowerCase());
-        });
-      });
-    }
-
-    result.sort((a, b) => {
-      let compareValue = 0;
-      
-      switch (sortField) {
-        case 'orderNumber':
-          compareValue = a.orderNumber.localeCompare(b.orderNumber);
-          break;
-        case 'clientName':
-          compareValue = a.clientName.localeCompare(b.clientName);
-          break;
-        case 'projectName':
-          compareValue = a.projectName.localeCompare(b.projectName);
-          break;
-        case 'status':
-          compareValue = a.status.localeCompare(b.status);
-          break;
-      }
-
-      return sortDirection === 'asc' ? compareValue : -compareValue;
-    });
-
-    return result;
-  }, [orders, sortField, sortDirection, searchTerm, clientFilter, projectFilter, statusFilter, getProductName]);
-
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredAndSortedOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
+  if (!orders.length || !products.length) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <div className="text-red-500">Error loading data</div>
+      </div>
+    );
+  }
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -244,14 +281,14 @@ export function OrderList({ onEdit }: OrderListProps) {
             <label className="block text-sm font-medium text-gray-700">Status</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as Order['status'] | '')}
+              onChange={(e) => setStatusFilter(e.target.value as OrderStatus | '')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             >
               <option value="">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="in-progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="new">Nowe</option>
+              <option value="shipped">Wysłane</option>
+              <option value="delivered">Dostarczone</option>
+              <option value="completed">Zakończone</option>
             </select>
           </div>
 
@@ -313,6 +350,15 @@ export function OrderList({ onEdit }: OrderListProps) {
                   {renderSortIcon('status')}
                 </div>
               </th>
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => handleSort('createdAt')}
+              >
+                <div className="flex items-center gap-2">
+                  Created At
+                  {renderSortIcon('createdAt')}
+                </div>
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
                 Actions
               </th>
@@ -320,7 +366,7 @@ export function OrderList({ onEdit }: OrderListProps) {
           </thead>
 
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredAndSortedOrders.slice(startIndex, endIndex).map((order) => (
+            {paginatedOrders.map((order) => (
               <React.Fragment key={order.id}>
                 <tr>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -334,13 +380,21 @@ export function OrderList({ onEdit }: OrderListProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                      ${order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        order.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
-                        order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'}`}
+                      ${order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                        order.status === 'shipped' ? 'bg-yellow-100 text-yellow-800' :
+                        order.status === 'new' ? 'bg-blue-100 text-blue-800' :
+                        order.status === 'completed' ? 'bg-orange-100 text-orange-800' :
+                        'bg-gray-100 text-gray-800'}`}
                     >
-                      {order.status}
+                      {order.status === 'new' ? 'Nowe' :
+                       order.status === 'shipped' ? 'Wysłane' :
+                       order.status === 'delivered' ? 'Dostarczone' :
+                       order.status === 'completed' ? 'Zakończone' :
+                       order.status}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(order.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                     <button
@@ -371,11 +425,11 @@ export function OrderList({ onEdit }: OrderListProps) {
                   place="left"
                   html={`
                     <div class="p-2">
-                      <div class="font-bold mb-2">Products:</div>
-                      <ul class="list-disc pl-4 mb-2">
-                        ${order.products.map(({ productId, quantity }) => `
-                          <li>${getProductName(productId)} - ${quantity}</li>
-                        `).join('')}
+                        <div class="font-bold mb-2">Products:</div>
+                         <ul class="list-disc pl-4 mb-2">
+                          ${(order.products ?? []).map(({ productId, quantity }) => `
+                         <li>${getProductName(productId)} - ${quantity}</li>
+                           `).join('')}
                       </ul>
                       ${order.notes ? `
                         <div>

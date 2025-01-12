@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, X, Search } from 'lucide-react';
-import type { Product, Order } from '../types';
+import type { Order, OrderStatus, Product } from '../types';
 import { useData } from '../contexts/DataContext';
 import { generateOrderNumber } from '../utils/orderNumber';
 
@@ -16,84 +16,83 @@ interface OrderProduct {
 
 export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
   const { products } = useData();
-  const [clientName, setClientName] = useState('');
-  const [projectName, setProjectName] = useState('');
-  const [notes, setNotes] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
-  const [selectedProducts, setSelectedProducts] = useState<OrderProduct[]>([]);
-  const [showProductSearch, setShowProductSearch] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    clientName: '',
+    projectName: '',
+    notes: '',
+    searchTerm: '',
+    filteredProducts: [] as Product[],
+    selectedProducts: [] as OrderProduct[],
+    showProductSearch: false,
+    isSubmitting: false,
+    error: null as string | null,
+    status: 'new' as OrderStatus,
+    pzDocumentLink: '',
+    invoiceLink: '',
+  });
 
   // Filter products based on search term
   React.useEffect(() => {
-    if (searchTerm.length >= 2) {
+    if (formData.searchTerm.length >= 2) {
       const filtered = products.filter(product =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase())
+        product.name.toLowerCase().includes(formData.searchTerm.toLowerCase())
       );
-      setFilteredProducts(filtered);
+      setFormData(prevState => ({ ...prevState, filteredProducts: filtered }));
     } else {
-      setFilteredProducts([]);
+      setFormData(prevState => ({ ...prevState, filteredProducts: [] }));
     }
-  }, [searchTerm, products]);
+  }, [formData.searchTerm, products]);
 
   const handleProductSelect = (product: Product) => {
-    if (!selectedProducts.some(p => p.product.id === product.id)) {
-      setSelectedProducts([...selectedProducts, { product, quantity: 1 }]);
+    if (!formData.selectedProducts.some(p => p.product.id === product.id)) {
+      setFormData(prevState => ({
+        ...prevState,
+        selectedProducts: [...prevState.selectedProducts, { product, quantity: 1 }],
+        searchTerm: '',
+        showProductSearch: false,
+      }));
     }
-    setSearchTerm('');
-    setShowProductSearch(false);
   };
 
   const handleQuantityChange = (productId: string, quantity: number) => {
-    setSelectedProducts(
-      selectedProducts.map(p =>
+    setFormData(prevState => ({
+      ...prevState,
+      selectedProducts: prevState.selectedProducts.map(p =>
         p.product.id === productId ? { ...p, quantity } : p
-      )
-    );
+      ),
+    }));
   };
 
   const handleRemoveProduct = (productId: string) => {
-    setSelectedProducts(selectedProducts.filter(p => p.product.id !== productId));
+    setFormData(prevState => ({
+      ...prevState,
+      selectedProducts: prevState.selectedProducts.filter(p => p.product.id !== productId),
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submission started'); // Debug log
-
-    if (selectedProducts.length === 0) {
-      setError('Please add at least one product');
-      return;
-    }
-
     try {
-      setIsSubmitting(true);
-      setError(null);
-      const orderNumber = await generateOrderNumber(1);
-      console.log('Generated order number:', orderNumber); // Debug log
-      
-      const newOrder = {
-        orderNumber,
-        clientName,
-        projectName,
-        status: 'pending' as const,
-        products: selectedProducts.map(({ product, quantity }) => ({
-          productId: product.id,
-          quantity
-        })),
-        notes,
-        userId: '1', // Możesz dostosować to pole według potrzeb
-      };
-
-      console.log('Submitting order:', newOrder); // Debug log
-      await onSubmit(newOrder);
-      console.log('Order submitted successfully'); // Debug log
+        const orderNumber = await generateOrderNumber(1);
+        const newOrder = {
+            orderNumber,
+            clientName: formData.clientName,
+            projectName: formData.projectName,
+            status: formData.status,
+            notes: formData.notes,
+            pzDocumentLink: formData.pzDocumentLink,
+            invoiceLink: formData.invoiceLink,
+            products: formData.selectedProducts.map(p => ({  // Changed from products to selectedProducts
+                productId: p.product.id,
+                quantity: p.quantity
+            })),
+            userId: '1'
+        };
+        
+        console.log('Submitting order with products:', newOrder.products);
+        await onSubmit(newOrder);
     } catch (error) {
-      console.error('Error creating order:', error);
-      setError('Failed to create order. Please try again.');
-    } finally {
-      setIsSubmitting(false);
+        console.error('Error submitting form:', error);
     }
   };
 
@@ -110,8 +109,8 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
             <input
               type="text"
               required
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
+              value={formData.clientName}
+              onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
@@ -124,8 +123,8 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
             <input
               type="text"
               required
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
+              value={formData.projectName}
+              onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
@@ -140,12 +139,11 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
                 <div className="relative flex-1">
                   <input
                     type="text"
-                    value={searchTerm}
+                    value={formData.searchTerm}
                     onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      setShowProductSearch(true);
+                      setFormData({ ...formData, searchTerm: e.target.value, showProductSearch: true });
                     }}
-                    onFocus={() => setShowProductSearch(true)}
+                    onFocus={() => setFormData({ ...formData, showProductSearch: true })}
                     placeholder="Search products..."
                     className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
@@ -153,7 +151,7 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowProductSearch(true)}
+                  onClick={() => setFormData({ ...formData, showProductSearch: true })}
                   className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
                 >
                   <Plus className="h-4 w-4" />
@@ -161,9 +159,9 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
               </div>
 
               {/* Product Search Results */}
-              {showProductSearch && filteredProducts.length > 0 && (
+              {formData.showProductSearch && formData.filteredProducts.length > 0 && (
                 <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-300 max-h-60 overflow-auto">
-                  {filteredProducts.map((product) => (
+                  {formData.filteredProducts.map((product) => (
                     <button
                       key={product.id}
                       type="button"
@@ -179,7 +177,7 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
 
             {/* Selected Products */}
             <div className="mt-4 space-y-2">
-              {selectedProducts.map(({ product, quantity }) => (
+              {formData.selectedProducts.map(({ product, quantity }) => (
                 <div
                   key={product.id}
                   className="flex items-center gap-4 bg-gray-50 p-3 rounded-md"
@@ -212,17 +210,53 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
               Notes
             </label>
             <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={4}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
 
+          {/* Status */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Status
+            </label>
+            <select
+              id="status"
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as OrderStatus })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              required
+            >
+              <option value="new">Nowe</option>
+              <option value="shipped">Wysłane</option>
+              <option value="delivered">Dostarczone</option>
+              <option value="completed">Zakończone</option>
+            </select>
+          </div>
+
+          {/* Link do PZ */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">
+              Link do PZ
+            </label>
+            <input
+              type="text"
+              name="pzDocumentLink"
+              value={formData.pzDocumentLink}
+              onChange={(e) => setFormData({
+                ...formData,
+                pzDocumentLink: e.target.value
+              })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            />
+          </div>
+
           {/* Error Message */}
-          {error && (
+          {formData.error && (
             <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-              {error}
+              {formData.error}
             </div>
           )}
 
@@ -231,17 +265,17 @@ export function OrderForm({ onSubmit, onCancel }: OrderFormProps) {
             <button
               type="button"
               onClick={onCancel}
-              disabled={isSubmitting}
+              disabled={formData.isSubmitting}
               className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={formData.isSubmitting}
               className="bg-indigo-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700"
             >
-              {isSubmitting ? 'Creating...' : 'Create Order'}
+              {formData.isSubmitting ? 'Creating...' : 'Create Order'}
             </button>
           </div>
         </div>

@@ -9,7 +9,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
-    "composite": true
+    "composite": true,
+    "noEmit": false  // Change this to false
   },
   "include": ["src/**/*"],
   "ts-node": {

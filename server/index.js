@@ -15,33 +15,78 @@ console.log('Server database path:', dbPath); // Add this for debugging
 
 let db = null;
 
+// Initialize the database with correct table schema
 async function initDatabase() {
     if (!db) {
         db = await open({
             filename: dbPath,
             driver: sqlite3.Database
         });
-        
-        // Add error logging
-        db.on('error', (err) => {
-            console.error('Database error:', err);
-        });
 
-        // Add these columns to your CREATE TABLE statement or alter the existing table
-        await db.run(`
-            ALTER TABLE orders 
-            ADD COLUMN pzDocumentLink TEXT,
-            ADD COLUMN invoiceLink TEXT
-        `);
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS orders (
+                id TEXT PRIMARY KEY,
+                orderNumber TEXT UNIQUE,
+                clientName TEXT,
+                projectName TEXT,
+                status TEXT,
+                notes TEXT DEFAULT NULL,
+                pzDocumentLink TEXT DEFAULT NULL,
+                invoiceLink TEXT DEFAULT NULL,
+                pzAddedAt TEXT DEFAULT NULL,
+                invoiceAddedAt TEXT DEFAULT NULL,
+                userId TEXT,
+                createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+                updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+            );
 
-        // Add new columns to orders table
-        await db.run(`
-            ALTER TABLE orders 
-            ADD COLUMN pzAddedAt TEXT,
-            ADD COLUMN invoiceAddedAt TEXT
+            CREATE TABLE IF NOT EXISTS products (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS order_products (
+                orderId TEXT,
+                productId TEXT,
+                quantity INTEGER,
+                FOREIGN KEY (orderId) REFERENCES orders(id),
+                FOREIGN KEY (productId) REFERENCES products(id),
+                PRIMARY KEY (orderId, productId)
+            );
         `);
     }
     return db;
+}
+
+// Add this after initializing the database connection
+async function addMissingColumns() {
+    const db = await initDatabase();
+    const columns = [
+        { name: 'pzDocumentLink', type: 'TEXT' },
+        { name: 'invoiceLink', type: 'TEXT' },
+        { name: 'pzAddedAt', type: 'TEXT' },
+        { name: 'invoiceAddedAt', type: 'TEXT' },
+        { name: 'notes', type: 'TEXT' }
+    ];
+
+    try {
+        // Get all columns info
+        const tableInfo = await db.all(`PRAGMA table_info(orders)`);
+        const existingColumns = tableInfo.map(col => col.name);
+
+        for (const column of columns) {
+            try {
+                if (!existingColumns.includes(column.name)) {
+                    await db.run(`ALTER TABLE orders ADD COLUMN ${column.name} ${column.type}`);
+                    console.log(`Added column ${column.name}`);
+                }
+            } catch (error) {
+                console.error(`Error adding column ${column.name}:`, error);
+            }
+        }
+    } catch (error) {
+        console.error('Error getting table info:', error);
+    }
 }
 
 const app = express();
@@ -93,8 +138,25 @@ app.get('/api/email/:fileId', async (req, res) => {
 app.get('/api/orders', async (req, res) => {
     try {
         const db = await initDatabase();
-        const orders = await db.all('SELECT * FROM orders');
-        
+        const orders = await db.all(`
+            SELECT 
+                o.id, 
+                o.orderNumber, 
+                o.clientName, 
+                o.projectName, 
+                o.status,
+                o.notes,
+                o.pzDocumentLink,
+                o.invoiceLink, 
+                o.pzAddedAt,
+                o.invoiceAddedAt,
+                datetime(o.createdAt) as createdAt,
+                datetime(o.updatedAt) as updatedAt,
+                o.userId
+            FROM orders o
+            ORDER BY o.createdAt DESC
+        `);
+
         // Get products for each order
         const ordersWithProducts = await Promise.all(orders.map(async (order) => {
             const products = await db.all(`
@@ -105,12 +167,11 @@ app.get('/api/orders', async (req, res) => {
             
             return {
                 ...order,
-                products,
-                createdAt: new Date(order.createdAt),
-                updatedAt: new Date(order.updatedAt)
+                products: products || []
             };
         }));
-        
+
+        console.log('Orders with products:', ordersWithProducts);
         res.json(ordersWithProducts);
     } catch (error) {
         console.error('Error fetching orders:', error);
@@ -118,63 +179,65 @@ app.get('/api/orders', async (req, res) => {
     }
 });
 
-// Add POST endpoint for orders
+// Fix the order creation endpoint
 app.post('/api/orders', async (req, res) => {
     try {
         const db = await initDatabase();
         const order = req.body;
-
-        // Sprawdź czy zamówienie o takim numerze już istnieje
-        const existingOrder = await db.get(
-            'SELECT id FROM orders WHERE orderNumber = ?',
-            [order.orderNumber]
-        );
-
-        if (existingOrder) {
-            return res.status(400).json({
-                error: 'Order number already exists'
-            });
-        }
-
-        // Kontynuuj tworzenie zamówienia
         const id = `order_${Date.now()}`;
         
-        // Insert the order
-        await db.run(`
-            INSERT INTO orders (
-                id, orderNumber, clientName, projectName, 
-                status, notes, userId, createdAt, updatedAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime(?), datetime(?))
-        `, [
-            id,
-            order.orderNumber,
-            order.clientName,
-            order.projectName,
-            order.status,
-            order.notes || null,
-            order.userId || null,
-            order.createdAt,
-            order.updatedAt
-        ]);
-
-        // Insert order products
-        for (const product of order.products) {
-            await db.run(`
-                INSERT INTO order_products (orderId, productId, quantity)
-                VALUES (?, ?, ?)
-            `, [id, product.productId, product.quantity]);
-        }
-
-        // Return the created order
-        const createdOrder = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
-        const products = await db.all('SELECT * FROM order_products WHERE orderId = ?', [id]);
+        console.log('Creating order with products:', order.products); // Debug log
         
-        res.status(201).json({
-            ...createdOrder,
-            products,
-            createdAt: new Date(createdOrder.createdAt),
-            updatedAt: new Date(createdOrder.updatedAt)
-        });
+        await db.run('BEGIN TRANSACTION');
+        
+        try {
+            // Insert main order record
+            await db.run(`
+                INSERT INTO orders (
+                    id, orderNumber, clientName, projectName, 
+                    status, notes, pzDocumentLink, invoiceLink,
+                    userId, createdAt, updatedAt
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            `, [
+                id,
+                order.orderNumber,
+                order.clientName,
+                order.projectName,
+                order.status,
+                order.notes,
+                order.pzDocumentLink,
+                order.invoiceLink,
+                order.userId
+            ]);
+
+            // Insert order products
+            if (order.products && order.products.length > 0) {
+                for (const product of order.products) {
+                    console.log('Inserting product:', product); // Debug log
+                    await db.run(`
+                        INSERT INTO order_products (orderId, productId, quantity)
+                        VALUES (?, ?, ?)
+                    `, [id, product.productId, product.quantity]);
+                }
+            }
+
+            await db.run('COMMIT');
+
+            // Fetch the complete order with products
+            const createdOrder = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+            const products = await db.all(`
+                SELECT op.productId, op.quantity 
+                FROM order_products op 
+                WHERE op.orderId = ?
+            `, [id]);
+            
+            console.log('Created order:', { ...createdOrder, products }); // Debug log
+            
+            res.status(201).json({ ...createdOrder, products });
+        } catch (error) {
+            await db.run('ROLLBACK');
+            throw error;
+        }
     } catch (error) {
         console.error('Error creating order:', error);
         res.status(500).json({ error: 'Failed to create order' });
@@ -217,36 +280,15 @@ app.get('/api/orders/:id', async (req, res) => {
 
 // Add PUT endpoint for updating orders
 app.put('/api/orders/:id', async (req, res) => {
-    console.log('Received PUT request for order:', req.params.id);
-    console.log('Request body:', req.body);
-    
     try {
         const db = await initDatabase();
         const { id } = req.params;
         const order = req.body;
 
-        // Sprawdź dane wejściowe
-        console.log('Validating input data:', {
-            hasId: !!id,
-            hasClientName: !!order.clientName,
-            hasProjectName: !!order.projectName,
-            hasStatus: !!order.status,
-            hasProducts: Array.isArray(order.products)
-        });
-
         await db.run('BEGIN TRANSACTION');
         
         try {
-            const existingOrder = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
-            console.log('Existing order found:', existingOrder);
-            
-            // Sprawdź czy zamówienie istnieje
-            if (!existingOrder) {
-                await db.run('ROLLBACK');
-                return res.status(404).json({ error: 'Order not found' });
-            }
-
-            // Aktualizuj główne dane zamówienia
+            // Update the main order fields
             await db.run(`
                 UPDATE orders 
                 SET clientName = ?,
@@ -255,34 +297,38 @@ app.put('/api/orders/:id', async (req, res) => {
                     notes = ?,
                     pzDocumentLink = ?,
                     invoiceLink = ?,
-                    pzAddedAt = CASE 
-                        WHEN pzDocumentLink IS NULL AND ? IS NOT NULL 
-                        THEN datetime('now') 
-                        ELSE pzAddedAt 
-                    END,
-                    invoiceAddedAt = CASE 
-                        WHEN invoiceLink IS NULL AND ? IS NOT NULL 
-                        THEN datetime('now') 
-                        ELSE invoiceAddedAt 
-                    END,
                     updatedAt = datetime('now')
                 WHERE id = ?
             `, [
                 order.clientName,
                 order.projectName,
                 order.status,
-                order.notes || null,
-                order.pzDocumentLink || null,
-                order.invoiceLink || null,
-                order.pzDocumentLink || null,
-                order.invoiceLink || null,
+                order.notes,
+                order.pzDocumentLink,
+                order.invoiceLink,
                 id
             ]);
 
-            // Usuń stare produkty
-            await db.run('DELETE FROM order_products WHERE orderId = ?', [id]);
+            // Update pzAddedAt if pzDocumentLink is not null
+            if (order.pzDocumentLink) {
+                await db.run(`
+                    UPDATE orders 
+                    SET pzAddedAt = datetime('now')
+                    WHERE id = ?
+                `, [id]);
+            }
 
-            // Dodaj nowe produkty
+            // Update invoiceAddedAt if invoiceLink is not null
+            if (order.invoiceLink) {
+                await db.run(`
+                    UPDATE orders 
+                    SET invoiceAddedAt = datetime('now')
+                    WHERE id = ?
+                `, [id]);
+            }
+
+            // Update order products
+            await db.run('DELETE FROM order_products WHERE orderId = ?', [id]);
             for (const product of order.products) {
                 await db.run(`
                     INSERT INTO order_products (orderId, productId, quantity)
@@ -292,16 +338,15 @@ app.put('/api/orders/:id', async (req, res) => {
 
             await db.run('COMMIT');
 
-            // Pobierz zaktualizowane dane
-            const updatedOrder = await db.get(`
-                SELECT orders.*, GROUP_CONCAT(order_products.productId || ':' || order_products.quantity) as products
-                FROM orders
-                LEFT JOIN order_products ON orders.id = order_products.orderId
-                WHERE orders.id = ?
-                GROUP BY orders.id
-            `, [id]);
+            const updatedOrder = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+            const products = await db.all('SELECT * FROM order_products WHERE orderId = ?', [id]);
 
-            res.json(updatedOrder);
+            res.json({
+                ...updatedOrder,
+                products,
+                createdAt: updatedOrder.createdAt,
+                updatedAt: new Date().toISOString()
+            });
         } catch (error) {
             await db.run('ROLLBACK');
             throw error;
@@ -390,8 +435,42 @@ app.delete('/api/products', async (req, res) => {
     }
 });
 
-const PORT = 3001;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Downloads directory: ${DOWNLOAD_DIR}`);
+// Add this after database initialization
+app.get('/api/debug/schema', async (req, res) => {
+  try {
+    const db = await initDatabase();
+    const schema = await db.all("SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'");
+    console.log('Database schema:', schema);
+    res.json(schema);
+  } catch (error) {
+    console.error('Error getting schema:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/orders/:id/products', async (req, res) => {
+  try {
+    const db = await initDatabase();
+    const { id } = req.params;
+    const products = await db.all(`
+      SELECT productId, quantity 
+      FROM order_products 
+      WHERE orderId = ?
+    `, [id]);
+    res.json(products);
+  } catch (error) {
+    console.error('Error fetching order products:', error);
+    res.status(500).json({ error: 'Failed to fetch order products' });
+  }
+});
+
+// Call this function before starting the server
+app.listen(3001, async () => {
+    try {
+        await addMissingColumns();
+        console.log('Database schema updated');
+        console.log('Server running on port 3001');
+    } catch (error) {
+        console.error('Error updating database schema:', error);
+    }
 });

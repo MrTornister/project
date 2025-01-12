@@ -21,7 +21,7 @@ export interface Order {
 
 const clientNames = ['Jacek', 'Paweł', 'Bartek', 'Rafał'];
 const projectNames = ['P.80', 'P.81', 'P.82', 'P.83', 'P.84', 'P.85', 'P.86', 'P.87', 'P.88', 'P.89', 'P.90'];
-const statuses: OrderType['status'][] = ['pending', 'in-progress', 'completed', 'cancelled'];
+const statuses: OrderType['status'][] = ['new', 'shipped', 'delivered', 'completed'];
 const notes = 'This is a sample note for the order.';
 
 async function generateOrders() {
@@ -66,8 +66,8 @@ async function generateOrders() {
         products: selectedProducts,
         userId: '1',
         notes,
-        createdAt: now,  // Use Date object
-        updatedAt: now   // Use Date object
+        createdAt: now.toISOString(),  // Convert Date to ISO string
+        updatedAt: now.toISOString()   // Convert Date to ISO string
       };
 
       await databaseService.addOrder(order);

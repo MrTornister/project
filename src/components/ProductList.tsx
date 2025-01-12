@@ -8,7 +8,7 @@ import { databaseService } from '../services/databaseService';
 const ITEMS_PER_PAGE = 10;
 
 export function ProductList() {
-  const { products, refreshProducts } = useData();
+  const { products = [], refreshProducts } = useData(); // Dodaj domyślną wartość
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [newProductName, setNewProductName] = useState('');
@@ -17,11 +17,11 @@ export function ProductList() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Calculate pagination values
-  const filteredProducts = products.filter(product => 
+  const filteredProducts = products?.filter(product => 
     searchTerm.length >= 3 
       ? product.name.toLowerCase().includes(searchTerm.toLowerCase()) 
       : true
-  );
+  ) || [];
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;

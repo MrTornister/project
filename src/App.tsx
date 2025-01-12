@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ClipboardList, Edit, Trash } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
@@ -13,6 +13,10 @@ import { DataProvider } from './contexts/DataContext';
 import { Settings } from './pages/Settings';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { databaseService } from './services/databaseService';
+import Modal from 'react-modal';
+
+// Ustaw element nadrzędny dla modali
+Modal.setAppElement('#root');
 
 interface OrderListProps {
   onNewOrder: () => void;
@@ -96,11 +100,16 @@ export function LocalOrderList({ onNewOrder }: OrderListProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                      ${order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        order.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
-                        order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'}`}>
-                      {order.status}
+                      ${order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                        order.status === 'shipped' ? 'bg-yellow-100 text-yellow-800' :
+                        order.status === 'new' ? 'bg-blue-100 text-blue-800' :
+                        order.status === 'completed' ? 'bg-orange-100 text-orange-800' :
+                        'bg-gray-100 text-gray-800'}`}>
+                      {order.status === 'new' ? 'Nowe' :
+                       order.status === 'shipped' ? 'Wysłane' :
+                       order.status === 'delivered' ? 'Dostarczone' :
+                       order.status === 'completed' ? 'Zakończone' :
+                       order.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -145,29 +154,27 @@ export function LocalOrderList({ onNewOrder }: OrderListProps) {
 function App() {
   return (
     <ErrorBoundary>
-      <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-        <DataProvider>
-          <Router>
-            <Routes>
-              <Route path="/" element={
-                <Layout>
-                  <div className="min-h-screen bg-gray-50">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                      <Dashboard />
-                      <div className="mt-8">
-                        <KanbanBoard />
-                      </div>
+      <DataProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={
+              <Layout>
+                <div className="min-h-screen bg-gray-50">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <Dashboard />
+                    <div className="mt-8">
+                      <KanbanBoard />
                     </div>
                   </div>
-                </Layout>
-              } />
-              <Route path="/products" element={<Products />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </Router>
-        </DataProvider>
-      </Suspense>
+                </div>
+              </Layout>
+            } />
+            <Route path="/products" element={<Products />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </Router>
+      </DataProvider>
     </ErrorBoundary>
   );
 }

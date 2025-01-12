@@ -1,86 +1,66 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { Order, Product } from '../types';
 import { databaseService } from '../services/databaseService';
-import type { Order, Product, EmailData } from '../types';
 
 interface DataContextType {
   orders: Order[];
   products: Product[];
   refreshOrders: () => Promise<void>;
   refreshProducts: () => Promise<void>;
-  emails?: EmailData[];
-  refreshEmails?: () => Promise<void>;
+  isLoading: boolean;
 }
 
-export const DataContext = createContext<DataContextType>({
-  orders: [],
-  products: [],
-  refreshOrders: async () => {},
-  refreshProducts: async () => {}
-});
+const DataContext = createContext<DataContextType | null>(null);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const refreshOrders = async () => {
+  const refreshOrders = useCallback(async () => {
     try {
-      const loadedOrders = await databaseService.getOrders();
-      setOrders(loadedOrders);
+      setIsLoading(true);
+      const fetchedOrders = await databaseService.getOrders();
+      console.log('Fetched orders:', fetchedOrders);
+      setOrders(fetchedOrders || []);
     } catch (error) {
-      console.error('Error loading orders:', error);
-      setError('Failed to load orders');
+      console.error('Error fetching orders:', error);
+      setOrders([]);
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const refreshProducts = async () => {
-    try {
-      const loadedProducts = await databaseService.getProducts();
-      setProducts(loadedProducts);
-    } catch (error) {
-      console.error('Error loading products:', error);
-      setError('Failed to load products');
-    }
-  };
-
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        await Promise.all([refreshOrders(), refreshProducts()]);
-      } catch (error) {
-        console.error('Error loading data:', error);
-        setError('Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
   }, []);
 
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  }
+  const refreshProducts = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const fetchedProducts = await databaseService.getProducts();
+      setProducts(fetchedProducts || []); // Zabezpieczenie przed undefined
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setProducts([]); // Ustaw pustą tablicę w przypadku błędu
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-red-600">
-        Error: {error}
-      </div>
-    );
-  }
+  useEffect(() => {
+    Promise.all([refreshOrders(), refreshProducts()]).then(() => {
+      setIsLoading(false);
+    });
+  }, [refreshOrders, refreshProducts]);
 
   return (
-    <DataContext.Provider value={{
-      orders,
-      products,
-      refreshOrders,
-      refreshProducts
-    }}>
+    <DataContext.Provider value={{ orders, products, refreshOrders, refreshProducts, isLoading }}>
       {children}
     </DataContext.Provider>
   );
 }
 
-export const useData = () => useContext(DataContext);
+export function useData() {
+  const context = useContext(DataContext);
+  if (!context) {
+    throw new Error('useData must be used within a DataProvider');
+  }
+  return context;
+}

@@ -1,32 +1,69 @@
-import React from 'react';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Eye } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
-import type { Order } from '../types';
+import type { OrderStatus } from '../types';
 import { databaseService } from '../services/databaseService';
+import { useState } from 'react';
+import Modal from 'react-modal';
+
+interface Column {
+  id: OrderStatus;
+  title: string;
+  color: string;
+}
+
+// Dodaj style dla modala
+const modalStyles = {
+  content: {
+    top: '50%',
+    left: '50%',
+    right: 'auto',
+    bottom: 'auto',
+    marginRight: '-50%',
+    transform: 'translate(-50%, -50%)',
+    maxWidth: '600px',
+    width: '90%',
+    borderRadius: '8px',
+    padding: '20px'
+  },
+  overlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.75)'
+  }
+};
 
 export function KanbanBoard() {
   const { orders, products, refreshOrders } = useData();
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
 
   const getProductName = (productId: string) => {
     const product = products.find(p => p.id === productId);
     return product ? product.name : 'Unknown Product';
   };
 
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
+  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
     try {
-      await databaseService.updateOrder(orderId, { status: newStatus });
+      const orderToUpdate = orders.find(o => o.id === orderId);
+      if (!orderToUpdate) return;
+
+      await databaseService.updateOrder(orderId, {
+        ...orderToUpdate,
+        status: newStatus
+      });
       await refreshOrders();
     } catch (error) {
       console.error('Error updating order status:', error);
     }
   };
 
-  const columns = [
-    { id: 'pending', title: 'Pending', color: 'bg-yellow-100' },
-    { id: 'in-progress', title: 'In Progress', color: 'bg-blue-100' },
-    { id: 'completed', title: 'Completed', color: 'bg-green-100' },
-    { id: 'cancelled', title: 'Cancelled', color: 'bg-red-100' }
+  const columns: Column[] = [
+    { id: 'new', title: 'Nowe', color: 'bg-blue-100' },
+    { id: 'shipped', title: 'Wysłane', color: 'bg-yellow-100' },
+    { id: 'delivered', title: 'Dostarczone', color: 'bg-green-100' },
+    { id: 'completed', title: 'Zakończone', color: 'bg-orange-100' }
   ];
+
+  const getOrderDetails = (orderId: string) => {
+    return orders.find(order => order.id === orderId);
+  };
 
   return (
     <div className="bg-white shadow rounded-lg p-6">
@@ -64,61 +101,119 @@ export function KanbanBoard() {
                       e.dataTransfer.setData('orderId', order.id);
                     }}
                   >
-                    <div className="flex justify-between items-start mb-2">
+                    <div className="flex justify-between items-start">
                       <div>
-                        <h5 className="font-medium text-gray-900">{order.clientName}</h5>
-                        <span className="text-xs text-gray-500">{order.orderNumber}</span>
+                        <div className="font-medium text-gray-900">{order.orderNumber}</div>
+                        <div className="text-sm text-gray-500">{order.clientName}</div>
+                        <div className="text-sm text-gray-500">{order.projectName}</div>
                       </div>
-                      <span className="text-xs text-gray-500">
-                        {order.createdAt instanceof Date 
-                          ? order.createdAt.toLocaleDateString()
-                          : new Date(order.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500 mb-2">{order.projectName}</p>
-                    
-                    {/* Products list */}
-                    <div className="mt-2 space-y-1">
-                      <p className="text-xs font-medium text-gray-700">Products:</p>
-                      {order.products.map(({ productId, quantity }) => (
-                        <div key={productId} className="text-xs text-gray-600 flex justify-between">
-                          <span>{getProductName(productId)}</span>
-                          <span className="font-medium">×{quantity}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Documents status */}
-                    <div className="mt-3 flex gap-2">
-                      {order.confirmation && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Confirmed
+                      <div className="flex flex-col items-end">
+                        <button 
+                          onClick={() => setSelectedOrder(order.id)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <span className="text-xs text-gray-500 mt-1">
+                          {new Date(order.createdAt).toLocaleDateString()}
                         </span>
-                      )}
-                      {order.documentPZ && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          PZ
-                        </span>
-                      )}
-                      {order.invoice && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          Invoice
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Notes preview */}
-                    {order.notes && (
-                      <div className="mt-2 text-xs text-gray-500">
-                        <p className="truncate">{order.notes}</p>
                       </div>
-                    )}
+                    </div>
                   </div>
                 ))}
             </div>
           </div>
         ))}
       </div>
+
+      {/* Order Details Modal */}
+      <Modal
+        isOpen={!!selectedOrder}
+        onRequestClose={() => setSelectedOrder(null)}
+        style={modalStyles}
+        contentLabel="Order Details"
+      >
+        <div className="modal-content">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Order Details</h2>
+            <button
+              onClick={() => setSelectedOrder(null)}
+              className="text-gray-400 hover:text-gray-600 text-xl"
+            >
+              ×
+            </button>
+          </div>
+          {selectedOrder && getOrderDetails(selectedOrder) && (
+            <div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="font-medium">Order Number</h3>
+                    <p>{getOrderDetails(selectedOrder)?.orderNumber}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Client Name</h3>
+                    <p>{getOrderDetails(selectedOrder)?.clientName}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Project Name</h3>
+                    <p>{getOrderDetails(selectedOrder)?.projectName}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Created At</h3>
+                    <p>{new Date(getOrderDetails(selectedOrder)?.createdAt ?? Date.now()).toLocaleString()}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-medium mb-2">Products</h3>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {getOrderDetails(selectedOrder)?.products.map(({ productId, quantity }) => (
+                      <div key={productId} className="flex justify-between py-1">
+                        <span>{getProductName(productId)}</span>
+                        <span>×{quantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {getOrderDetails(selectedOrder)?.notes && (
+                  <div>
+                    <h3 className="font-medium mb-2">Notes</h3>
+                    <p className="bg-gray-50 rounded-lg p-4">{getOrderDetails(selectedOrder)?.notes}</p>
+                  </div>
+                )}
+
+                <div>
+                  <h3 className="font-medium mb-2">Documents</h3>
+                  <div className="flex gap-2">
+                    {getOrderDetails(selectedOrder)?.pzDocumentLink && (
+                      <a 
+                        href={getOrderDetails(selectedOrder)?.pzDocumentLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+                      >
+                        PZ Document
+                      </a>
+                    )}
+                    {getOrderDetails(selectedOrder)?.invoiceLink && (
+                      <a
+                        href={getOrderDetails(selectedOrder)?.invoiceLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800"
+                      >
+                        Invoice
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

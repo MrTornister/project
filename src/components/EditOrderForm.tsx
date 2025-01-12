@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Search } from 'lucide-react';
-import { Order, Product } from '../types';
+import { Order, Product, OrderStatus } from '../types';
 import { useData } from '../contexts/DataContext';
 
 interface EditOrderFormProps {
@@ -24,6 +24,7 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
     pzDocumentLink: order.pzDocumentLink || '',
     invoiceLink: order.invoiceLink || ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Remove the problematic useEffect
 
@@ -45,7 +46,7 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
   };
 
   const [selectedProducts, setSelectedProducts] = useState<OrderProduct[]>(
-    order.products.map(p => ({
+    (order.products ?? []).map(p => ({
       product: products.find(prod => prod.id === p.productId)!,
       quantity: p.quantity
     }))
@@ -53,8 +54,7 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [] = useState<string | null>(null);
 
   // Filter products based on search term
   useEffect(() => {
@@ -87,42 +87,31 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
   const handleRemoveProduct = (productId: string) => {
     setSelectedProducts(selectedProducts.filter(p => p.product.id !== productId));
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await handleSave();
-  };
-
-  const handleSave = async () => {
-    console.log('Starting save operation...');
     setIsSubmitting(true);
-    setError(null);
-    
     try {
-      const updatedOrder = {
+      console.log('Form data before update:', formData);
+      console.log('Form data before update:', formData);
+
+      const updatedOrder: Order = {
         ...order,
-        ...formData,
+        clientName: formData.clientName,
+        projectName: formData.projectName,
+        status: formData.status,
+        notes: formData.notes,
+        pzDocumentLink: formData.pzDocumentLink || undefined, // Change null to undefined
         products: selectedProducts.map(({ product, quantity }) => ({
           productId: product.id,
           quantity,
-        }))
+        })),
+        userId: order.userId, // Ensure userId is included
       };
-
-      // Update dates only when links are added
-      if (formData.pzDocumentLink && !order.pzDocumentLink) {
-        updatedOrder.pzAddedAt = new Date();
-      }
-      if (formData.invoiceLink && !order.invoiceLink) {
-        updatedOrder.invoiceAddedAt = new Date();
-      }
       
-      console.log('Saving order:', updatedOrder);
+      console.log('Sending updated order with link:', updatedOrder.pzDocumentLink);
       await onSave(updatedOrder);
     } catch (error) {
-      console.error('Save operation failed:', error);
-      setError('Failed to update order. Please try again.');
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error saving order:', error);
     }
   };
 
@@ -168,13 +157,13 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
               <select
                 id="status"
                 value={formData.status}
-                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as Order['status'] }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as OrderStatus }))}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               >
-                <option value="pending">Pending</option>
-                <option value="in-progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
+                <option value="new">Nowe</option>
+                <option value="shipped">Wysłane</option>
+                <option value="delivered">Dostarczone</option>
+                <option value="completed">Zakończone</option>
               </select>
             </div>
 
