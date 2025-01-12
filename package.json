@@ -4,14 +4,16 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "clean": "rm -rf dist",
     "init-db": "NODE_OPTIONS=\"--loader ts-node/esm\" node src/scripts/initDatabase.ts",
     "dev": "vite",
     "server": "node server/index.js",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "start": "npm run init-db && npm run dev:all",
     "build:node": "tsc --project tsconfig.node.json",
-    "generate-orders": "npm run build:node && node dist/node/src/scripts/generateOrders.js"
+    "generate-orders": "npm run build:node && node dist/node/src/scripts/generateOrders.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@types/react-beautiful-dnd": "^13.1.8",

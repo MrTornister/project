@@ -8,12 +8,13 @@ import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
 import { KanbanBoard } from './components/KanbanBoard';
 import { Layout } from './components/Layout';
-import type { Order, Product } from './types';
+import type { Order } from './types';
 import { DataProvider } from './contexts/DataContext';
 import { Settings } from './pages/Settings';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { databaseService } from './services/databaseService';
 import Modal from 'react-modal';
+import { ArchivedOrders } from './components/ArchivedOrders';
 
 // Ustaw element nadrzędny dla modali
 Modal.setAppElement('#root');
@@ -24,12 +25,29 @@ interface OrderListProps {
 
 export function LocalOrderList({ onNewOrder }: OrderListProps) {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     const fetchOrders = async () => {
       const ordersList = await databaseService.getOrders();
-      setOrders(ordersList);
+      setOrders(ordersList.map(order => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        clientName: order.clientName,
+        projectName: order.projectName, 
+        status: order.status,
+        pzAddedAt: order.pzAddedAt ? new Date(order.pzAddedAt).toISOString() : undefined,
+        invoiceAddedAt: order.invoiceAddedAt ? new Date(order.invoiceAddedAt).toISOString() : undefined,
+        notes: order.notes || undefined, // Changed from null to undefined
+        pzDocumentLink: order.pzDocumentLink || undefined, // Changed from null to undefined
+        invoiceLink: order.invoiceLink || undefined, // Changed from null to undefined
+        isArchived: Boolean(order.isArchived),
+        archivedAt: order.archivedAt || undefined, // Changed from null to undefined 
+        createdAt: order.createdAt || new Date().toISOString(),
+        updatedAt: order.updatedAt || new Date().toISOString(),
+        userId: order.userId,
+        products: order.products
+      })));
     };
 
     const fetchProducts = async () => {
@@ -153,8 +171,8 @@ export function LocalOrderList({ onNewOrder }: OrderListProps) {
 
 function App() {
   return (
-    <ErrorBoundary>
-      <DataProvider>
+    <DataProvider>
+      <ErrorBoundary>
         <Router>
           <Routes>
             <Route path="/" element={
@@ -172,10 +190,11 @@ function App() {
             <Route path="/products" element={<Products />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/archived" element={<ArchivedOrders />} />
           </Routes>
         </Router>
-      </DataProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </DataProvider>
   );
 }
 

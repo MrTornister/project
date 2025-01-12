@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Search } from 'lucide-react';
-import { Order, Product, OrderStatus } from '../types';
+import { OrderStatus } from '../types';
 import { useData } from '../contexts/DataContext';
 
 interface EditOrderFormProps {
-  order: Order;
-  onSave: (updatedOrder: Order) => Promise<void>;
+  order: Omit<Order, 'userId'>; // Remove userId from required props
+  onSave: (order: Order) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -17,16 +17,10 @@ interface OrderProduct {
 export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
   const { products } = useData();
   const [formData, setFormData] = useState({
-    clientName: order.clientName,
-    projectName: order.projectName,
-    status: order.status,
-    notes: order.notes || '',
-    pzDocumentLink: order.pzDocumentLink || '',
-    invoiceLink: order.invoiceLink || ''
+    ...order,
+    isArchived: order.isArchived || false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Remove the problematic useEffect
 
   const handleLinkChange = (
     e: React.ChangeEvent<HTMLInputElement>, 
@@ -38,10 +32,10 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
     
     // Set the appropriate date only when saving the form
     if (field === 'pzDocumentLink' && value && !order.pzDocumentLink) {
-      order.pzAddedAt = new Date();
+      order.pzAddedAt = new Date().toISOString();
     }
     if (field === 'invoiceLink' && value && !order.invoiceLink) {
-      order.invoiceAddedAt = new Date();
+      order.invoiceAddedAt = new Date().toISOString();
     }
   };
 
@@ -87,31 +81,43 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
   const handleRemoveProduct = (productId: string) => {
     setSelectedProducts(selectedProducts.filter(p => p.product.id !== productId));
   };
+
+  const handleArchiveChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      isArchived: e.target.checked,
+      archivedAt: e.target.checked ? new Date().toISOString() : undefined
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      console.log('Form data before update:', formData);
-      console.log('Form data before update:', formData);
-
       const updatedOrder: Order = {
-        ...order,
+        ...order, // Start with all existing order fields
         clientName: formData.clientName,
         projectName: formData.projectName,
         status: formData.status,
         notes: formData.notes,
-        pzDocumentLink: formData.pzDocumentLink || undefined, // Change null to undefined
+        pzDocumentLink: formData.pzDocumentLink || undefined,
+        invoiceLink: formData.invoiceLink || undefined,
+        isArchived: formData.isArchived,
+        archivedAt: formData.archivedAt,
         products: selectedProducts.map(({ product, quantity }) => ({
           productId: product.id,
           quantity,
         })),
-        userId: order.userId, // Ensure userId is included
+        updatedAt: new Date().toISOString()
       };
       
-      console.log('Sending updated order with link:', updatedOrder.pzDocumentLink);
+      console.log('Sending updated order:', updatedOrder);
       await onSave(updatedOrder);
+      onCancel();
     } catch (error) {
       console.error('Error saving order:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -179,6 +185,24 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               />
             </div>
+
+            <div>
+              {formData.status === 'completed' && (
+                <div className="mt-4">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.isArchived}
+                      onChange={handleArchiveChange}
+                      className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">
+                      Archive this order
+                    </span>
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right column - Documents and Dates */}
@@ -205,7 +229,7 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
               <input
                 type="url"
                 id="invoiceLink"
-                value={formData.invoiceLink}
+                value={formData.invoiceLink || ''}
                 onChange={(e) => handleLinkChange(e, 'invoiceLink')}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               />
@@ -341,3 +365,32 @@ export function EditOrderForm({ order, onSave, onCancel }: EditOrderFormProps) {
     </div>
   );
 }
+
+export interface Product {
+  id: string;
+  name: string;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  clientName: string;
+  projectName: string;
+  status: OrderStatus;
+  createdAt: string;
+  updatedAt: string;
+  pzDocumentLink?: string;
+  pzAddedAt?: string;
+  invoiceAddedAt?: string;
+  invoiceLink?: string | null;
+  notes?: string;
+  isArchived: boolean;
+  products: Array<{ 
+    productId: string; 
+    quantity: number 
+  }>;
+  archivedAt?: string;
+}
+
+// Removed local declaration of OrderStatus to resolve conflict with import
+

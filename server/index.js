@@ -37,7 +37,9 @@ async function initDatabase() {
                 invoiceAddedAt TEXT DEFAULT NULL,
                 userId TEXT,
                 createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-                updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+                updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+                isArchived BOOLEAN DEFAULT 0,
+                archivedAt TEXT DEFAULT NULL
             );
 
             CREATE TABLE IF NOT EXISTS products (
@@ -60,33 +62,25 @@ async function initDatabase() {
 
 // Add this after initializing the database connection
 async function addMissingColumns() {
-    const db = await initDatabase();
-    const columns = [
-        { name: 'pzDocumentLink', type: 'TEXT' },
-        { name: 'invoiceLink', type: 'TEXT' },
-        { name: 'pzAddedAt', type: 'TEXT' },
-        { name: 'invoiceAddedAt', type: 'TEXT' },
-        { name: 'notes', type: 'TEXT' }
-    ];
+  const db = await initDatabase();
+  
+  try {
+    const tableInfo = await db.all(`PRAGMA table_info(orders)`);
+    const existingColumns = tableInfo.map(col => col.name);
 
-    try {
-        // Get all columns info
-        const tableInfo = await db.all(`PRAGMA table_info(orders)`);
-        const existingColumns = tableInfo.map(col => col.name);
-
-        for (const column of columns) {
-            try {
-                if (!existingColumns.includes(column.name)) {
-                    await db.run(`ALTER TABLE orders ADD COLUMN ${column.name} ${column.type}`);
-                    console.log(`Added column ${column.name}`);
-                }
-            } catch (error) {
-                console.error(`Error adding column ${column.name}:`, error);
-            }
-        }
-    } catch (error) {
-        console.error('Error getting table info:', error);
+    // Only try to add columns that don't exist
+    if (!existingColumns.includes('isArchived')) {
+      await db.run(`ALTER TABLE orders ADD COLUMN isArchived BOOLEAN DEFAULT 0`);
+      console.log('Added column isArchived');
     }
+
+    if (!existingColumns.includes('archivedAt')) {
+      await db.run(`ALTER TABLE orders ADD COLUMN archivedAt TEXT DEFAULT NULL`);
+      console.log('Added column archivedAt');
+    }
+  } catch (error) {
+    console.error('Error adding columns:', error);
+  }
 }
 
 const app = express();
@@ -150,6 +144,8 @@ app.get('/api/orders', async (req, res) => {
                 o.invoiceLink, 
                 o.pzAddedAt,
                 o.invoiceAddedAt,
+                o.isArchived,
+                o.archivedAt,
                 datetime(o.createdAt) as createdAt,
                 datetime(o.updatedAt) as updatedAt,
                 o.userId
@@ -278,83 +274,125 @@ app.get('/api/orders/:id', async (req, res) => {
     }
 });
 
-// Add PUT endpoint for updating orders
+// Update orders endpoint
 app.put('/api/orders/:id', async (req, res) => {
-    try {
-        const db = await initDatabase();
-        const { id } = req.params;
-        const order = req.body;
+  const db = await initDatabase();
+  
+  try {
+    const { id } = req.params;
+    const order = req.body;
 
-        await db.run('BEGIN TRANSACTION');
-        
-        try {
-            // Update the main order fields
-            await db.run(`
-                UPDATE orders 
-                SET clientName = ?,
-                    projectName = ?,
-                    status = ?,
-                    notes = ?,
-                    pzDocumentLink = ?,
-                    invoiceLink = ?,
-                    updatedAt = datetime('now')
-                WHERE id = ?
-            `, [
-                order.clientName,
-                order.projectName,
-                order.status,
-                order.notes,
-                order.pzDocumentLink,
-                order.invoiceLink,
-                id
-            ]);
+    // Begin transaction
+    await db.run('BEGIN TRANSACTION');
 
-            // Update pzAddedAt if pzDocumentLink is not null
-            if (order.pzDocumentLink) {
-                await db.run(`
-                    UPDATE orders 
-                    SET pzAddedAt = datetime('now')
-                    WHERE id = ?
-                `, [id]);
-            }
+    await db.run(`
+      UPDATE orders 
+      SET 
+        clientName = ?,
+        projectName = ?,
+        status = ?,
+        notes = ?,
+        pzDocumentLink = ?,
+        pzAddedAt = CASE 
+          WHEN ? IS NOT NULL AND (pzDocumentLink IS NULL OR pzDocumentLink != ?) THEN datetime('now')
+          ELSE pzAddedAt 
+        END,
+        invoiceLink = ?,
+        invoiceAddedAt = CASE 
+          WHEN ? IS NOT NULL AND (invoiceLink IS NULL OR invoiceLink != ?) THEN datetime('now')
+          ELSE invoiceAddedAt 
+        END,
+        updatedAt = datetime('now'),
+        isArchived = ?,
+        archivedAt = ?
+      WHERE id = ?
+    `, [
+      order.clientName,
+      order.projectName,
+      order.status,
+      order.notes,
+      order.pzDocumentLink,
+      order.pzDocumentLink,
+      order.pzDocumentLink,
+      order.invoiceLink,
+      order.invoiceLink,
+      order.invoiceLink,
+      order.isArchived ? 1 : 0,
+      order.isArchived ? new Date().toISOString() : null,
+      id
+    ]);
 
-            // Update invoiceAddedAt if invoiceLink is not null
-            if (order.invoiceLink) {
-                await db.run(`
-                    UPDATE orders 
-                    SET invoiceAddedAt = datetime('now')
-                    WHERE id = ?
-                `, [id]);
-            }
-
-            // Update order products
-            await db.run('DELETE FROM order_products WHERE orderId = ?', [id]);
-            for (const product of order.products) {
-                await db.run(`
-                    INSERT INTO order_products (orderId, productId, quantity)
-                    VALUES (?, ?, ?)
-                `, [id, product.productId, product.quantity]);
-            }
-
-            await db.run('COMMIT');
-
-            const updatedOrder = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
-            const products = await db.all('SELECT * FROM order_products WHERE orderId = ?', [id]);
-
-            res.json({
-                ...updatedOrder,
-                products,
-                createdAt: updatedOrder.createdAt,
-                updatedAt: new Date().toISOString()
-            });
-        } catch (error) {
-            await db.run('ROLLBACK');
-            throw error;
-        }
-    } catch (error) {
-        console.error('Error updating order:', error);
-        res.status(500).json({ error: 'Failed to update order' });
+    // Update products if they changed
+    if (order.products && order.products.length > 0) {
+      // First delete existing products
+      await db.run('DELETE FROM order_products WHERE orderId = ?', [id]);
+      
+      // Then insert new products
+      for (const product of order.products) {
+        await db.run(`
+          INSERT INTO order_products (orderId, productId, quantity)
+          VALUES (?, ?, ?)
+        `, [id, product.productId, product.quantity]);
+      }
     }
+
+    // Commit transaction
+    await db.run('COMMIT');
+
+    // Get updated order with products
+    const updatedOrder = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
+    const products = await db.all('SELECT * FROM order_products WHERE orderId = ?', [id]);
+
+    res.json({
+      ...updatedOrder,
+      products,
+      isArchived: Boolean(updatedOrder.isArchived)
+    });
+
+  } catch (error) {
+    // Rollback transaction on error
+    await db.run('ROLLBACK');
+    console.error('Error updating order:', error);
+    res.status(500).json({ error: 'Failed to update order' });
+  }
+});
+
+// Archive order
+app.put('/api/orders/:id/archive', async (req, res) => {
+  try {
+    const db = await initDatabase();
+    const { id } = req.params;
+    await db.run(`
+      UPDATE orders 
+      SET status = 'archived', 
+          archivedAt = datetime('now'),
+          isArchived = 1
+      WHERE id = ?
+    `, [id]);
+    res.status(200).send();
+  } catch (error) {
+    console.error('Error archiving order:', error);
+    res.status(500).json({ error: 'Failed to archive order' });
+  }
+});
+
+// Unarchive order
+app.put('/api/orders/:id/unarchive', async (req, res) => {
+  try {
+    const db = await initDatabase();
+    const { id } = req.params;
+    await db.run(`
+      UPDATE orders 
+      SET status = 'completed', 
+          archivedAt = NULL,
+          isArchived = 0
+      WHERE id = ?
+    `, [id]);
+    res.status(200).send();
+  } catch (error) {
+    console.error('Error unarchiving order:', error);
+    res.status(500).json({ error: 'Failed to unarchive order' });
+  }
 });
 
 // Delete single order

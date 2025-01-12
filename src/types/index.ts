@@ -18,18 +18,23 @@ export interface Order {
   clientName: string;
   projectName: string;
   status: OrderStatus;
-  products: Array<{ productId: string; quantity: number }>;
-  notes?: string;
-  pzDocumentLink?: string;
-  invoiceLink?: string;
-  pzAddedAt?: Date;
-  invoiceAddedAt?: Date;
+  products: Array<{ 
+    productId: string; 
+    quantity: number 
+  }>;
+  notes: string | null;
+  pzDocumentLink: string | null;
+  invoiceLink: string | null;
+  pzAddedAt: string | null;
+  invoiceAddedAt: string | null;
   userId: string;
   createdAt: string;
   updatedAt: string;
+  isArchived: boolean;
+  archivedAt: string | null;
 }
 
-export type OrderStatus = 'new' | 'shipped' | 'delivered' | 'completed';
+export type OrderStatus = 'new' | 'shipped' | 'delivered' | 'completed' | 'archived';
 
 export interface EmailData {
   subject: string;

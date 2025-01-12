@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Layout } from '../components/Layout';
 import { OrderForm } from '../components/OrderForm';
 import type { Order } from '../types';
-import { databaseService } from '../services/databaseService';
+import { databaseService, type LocalOrder } from '../services/databaseService';
 import { useData } from '../contexts/DataContext';
 import { Edit, Trash, Search, ArrowUpDown, Eye } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
@@ -28,9 +28,18 @@ export function Orders() {
       console.log('Orders component received order data:', orderData);
       console.log('PZ Document Link in Orders:', orderData.pzDocumentLink);
       
-      const result = await databaseService.createOrder(orderData);
-      console.log('Create order result:', result);
-      
+      // Convert to LocalOrder type for database
+      const localOrder = {
+        ...orderData,
+        userId: '1',
+        isArchived: false,
+        pzAddedAt: orderData.pzAddedAt ? new Date(orderData.pzAddedAt) : undefined,
+        invoiceAddedAt: orderData.invoiceAddedAt ? new Date(orderData.invoiceAddedAt) : undefined,
+        invoiceLink: orderData.invoiceLink || undefined,
+        archivedAt: orderData.archivedAt || null
+      };
+
+      await databaseService.createOrder(localOrder);
       await refreshOrders();
       setIsCreating(false);
     } catch (error) {
@@ -40,7 +49,13 @@ export function Orders() {
   };
 
   const handleEdit = (order: Order) => {
-    setEditingOrder(order);
+    // Ensure isArchived is always a boolean
+    setEditingOrder({
+      ...order,
+      userId: order.userId || '1', // Add required userId
+      isArchived: order.isArchived ?? false, 
+      invoiceLink: order.invoiceLink || undefined
+    });
   };
 
   const handleUpdateOrder = async (orderId: string, updatedOrder: Order) => {
@@ -51,7 +66,20 @@ export function Orders() {
         pzDocumentLink: updatedOrder.pzDocumentLink 
       });
 
-      const result = await databaseService.updateOrder(orderId, updatedOrder);
+      // Convert the Order type to LocalOrder type
+      const localOrder: LocalOrder = {
+        ...updatedOrder,
+        userId: updatedOrder.userId || '1', // Ensure userId is present
+        isArchived: Boolean(updatedOrder.isArchived),
+        pzAddedAt: updatedOrder.pzAddedAt ? new Date(updatedOrder.pzAddedAt) : undefined,
+        invoiceAddedAt: updatedOrder.invoiceAddedAt ? new Date(updatedOrder.invoiceAddedAt) : undefined,
+        invoiceLink: updatedOrder.invoiceLink || undefined,
+        notes: updatedOrder.notes || undefined,
+        pzDocumentLink: updatedOrder.pzDocumentLink || undefined,
+        archivedAt: updatedOrder.archivedAt || null // Change undefined to null
+      };
+
+      const result = await databaseService.updateOrder(orderId, localOrder);
       console.log('Update result:', result);
 
       if (!result) {
@@ -96,10 +124,19 @@ export function Orders() {
             />
           ) : editingOrder ? (
             <EditOrderForm
-              order={editingOrder}
+              order={{
+                ...editingOrder,
+                isArchived: editingOrder.isArchived ?? false,
+                invoiceLink: editingOrder.invoiceLink || undefined
+                // Remove userId from here since it's not needed in EditOrderFormProps
+              }}
               onSave={async (updatedOrder) => {
                 try {
-                  await handleUpdateOrder(editingOrder.id, updatedOrder);
+                  await handleUpdateOrder(editingOrder.id, {
+                    ...updatedOrder,
+                    userId: editingOrder.userId, // Add userId when sending to handleUpdateOrder
+                    invoiceLink: updatedOrder.invoiceLink || undefined
+                  });
                 } catch (error) {
                   console.error('Error in onSave callback:', error);
                   throw error;
@@ -138,8 +175,11 @@ export function OrderList({ onEdit }: OrderListProps) {
     return product ? product.name : 'Unknown Product';
   }, [products]);
 
+  // Filter out archived orders
+  const activeOrders = orders.filter(order => !order.isArchived);
+
   const filteredAndSortedOrders = useMemo(() => {
-    return orders
+    return activeOrders
       .filter(order => {
         if (clientFilter && !order.clientName.toLowerCase().includes(clientFilter.toLowerCase())) {
           return false;
@@ -184,7 +224,7 @@ export function OrderList({ onEdit }: OrderListProps) {
             return 0;
         }
       });
-  }, [orders, products, sortField, sortDirection, searchTerm, clientFilter, projectFilter, statusFilter, getProductName]);
+  }, [activeOrders, products, sortField, sortDirection, searchTerm, clientFilter, projectFilter, statusFilter, getProductName]);
 
   // Calculate pagination values
   const startIndex = (currentPage - 1) * itemsPerPage;

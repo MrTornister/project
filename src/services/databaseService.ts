@@ -1,11 +1,6 @@
-import type { OrderStatus, Product } from '../types/index.js';
+import type { Order, Product } from '../types/index.js';
 
-export interface LocalOrder {
-  id: string;
-  orderNumber: string;
-  clientName: string;
-  projectName: string;
-  status: OrderStatus;
+export interface LocalOrder extends Omit<Order, 'notes' | 'pzDocumentLink' | 'invoiceLink' | 'pzAddedAt' | 'invoiceAddedAt'> {
   notes?: string;
   pzDocumentLink?: string;
   invoiceLink?: string;
@@ -14,6 +9,8 @@ export interface LocalOrder {
   userId: string;
   createdAt: string;
   updatedAt: string;
+  isArchived: boolean;  // Add required archive flag
+  archivedAt: string | null;  // Add optional archive timestamp
   products: Array<{
     productId: string;
     quantity: number;
@@ -81,35 +78,25 @@ export const databaseService = {
 
   async updateOrder(id: string, order: LocalOrder): Promise<LocalOrder> {
     try {
-      const orderToUpdate = {
-        ...order,
-        updatedAt: new Date().toISOString(),
-        pzDocumentLink: order.pzDocumentLink || null,
-        invoiceLink: order.invoiceLink || null,
-        pzAddedAt: order.pzAddedAt ? new Date(order.pzAddedAt).toISOString() : null,
-        invoiceAddedAt: order.invoiceAddedAt ? new Date(order.invoiceAddedAt).toISOString() : null,
-        notes: order.notes || null
-      };
-
       const response = await fetch(`${API_URL}/orders/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(orderToUpdate)
+        body: JSON.stringify(order)
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Server error response:', errorText);
-        throw new Error(`Failed to update order: ${errorText}`);
+        throw new Error('Failed to update order');
       }
 
       const updatedOrder = await response.json();
       return {
         ...updatedOrder,
-        pzAddedAt: updatedOrder.pzAddedAt ? new Date(updatedOrder.pzAddedAt) : undefined,
-        invoiceAddedAt: updatedOrder.invoiceAddedAt ? new Date(updatedOrder.invoiceAddedAt) : undefined
+        isArchived: Boolean(updatedOrder.isArchived),
+        pzAddedAt: updatedOrder.pzAddedAt || undefined,
+        invoiceAddedAt: updatedOrder.invoiceAddedAt || undefined,
+        archivedAt: updatedOrder.archivedAt || undefined
       };
     } catch (error) {
       console.error('Error updating order:', error);
@@ -190,6 +177,34 @@ export const databaseService = {
       pzAddedAt: createdOrder.pzAddedAt ? new Date(createdOrder.pzAddedAt) : undefined,
       invoiceAddedAt: createdOrder.invoiceAddedAt ? new Date(createdOrder.invoiceAddedAt) : undefined
     };
+  },
+
+  async archiveOrder(id: string): Promise<void> {
+    try {
+      await fetch(`${API_URL}/orders/${id}/archive`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+    } catch (error) {
+      console.error('Error archiving order:', error);
+      throw error;
+    }
+  },
+
+  async unarchiveOrder(id: string): Promise<void> {
+    try {
+      await fetch(`${API_URL}/orders/${id}/unarchive`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+    } catch (error) {
+      console.error('Error unarchiving order:', error);
+      throw error;
+    }
   }
 };
 

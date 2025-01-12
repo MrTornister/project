@@ -1,6 +1,6 @@
 import { GripVertical, Eye } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
-import type { OrderStatus } from '../types';
+import type { Order, OrderStatus } from '../types';
 import { databaseService } from '../services/databaseService';
 import { useState } from 'react';
 import Modal from 'react-modal';
@@ -10,6 +10,9 @@ interface Column {
   title: string;
   color: string;
 }
+
+// Define the record type for ordersByStatus
+type OrdersByStatus = Record<OrderStatus, Order[]>;
 
 // Dodaj style dla modala
 const modalStyles = {
@@ -44,10 +47,21 @@ export function KanbanBoard() {
       const orderToUpdate = orders.find(o => o.id === orderId);
       if (!orderToUpdate) return;
 
-      await databaseService.updateOrder(orderId, {
+      // Convert null values to undefined for LocalOrder type
+      const updatedOrder = {
         ...orderToUpdate,
-        status: newStatus
-      });
+        status: newStatus,
+        isArchived: false,
+        userId: '1',
+        notes: orderToUpdate.notes || undefined,
+        pzDocumentLink: orderToUpdate.pzDocumentLink || undefined,
+        invoiceLink: orderToUpdate.invoiceLink || undefined,
+        pzAddedAt: orderToUpdate.pzAddedAt ? new Date(orderToUpdate.pzAddedAt) : undefined,
+        invoiceAddedAt: orderToUpdate.invoiceAddedAt ? new Date(orderToUpdate.invoiceAddedAt) : undefined,
+        archivedAt: undefined
+      };
+
+      await databaseService.updateOrder(orderId, updatedOrder);
       await refreshOrders();
     } catch (error) {
       console.error('Error updating order status:', error);
@@ -61,8 +75,18 @@ export function KanbanBoard() {
     { id: 'completed', title: 'Zakończone', color: 'bg-orange-100' }
   ];
 
-  const getOrderDetails = (orderId: string) => {
+  const getOrderDetails = (orderId: string): Order | undefined => {
     return orders.find(order => order.id === orderId);
+  };
+
+  const activeOrders = orders.filter(order => !order.isArchived);
+
+  const ordersByStatus: OrdersByStatus = {
+    new: activeOrders.filter(order => order.status === 'new'),
+    shipped: activeOrders.filter(order => order.status === 'shipped'),
+    delivered: activeOrders.filter(order => order.status === 'delivered'),
+    completed: activeOrders.filter(order => order.status === 'completed'),
+    archived: [] // Add this to match OrderStatus type, though we don't show it
   };
 
   return (
@@ -87,12 +111,10 @@ export function KanbanBoard() {
             }}
           >
             <h4 className="font-medium text-gray-900 mb-4">
-              {column.title} ({orders.filter(order => order.status === column.id).length})
+              {column.title} ({ordersByStatus[column.id].length})
             </h4>
             <div className="space-y-4">
-              {orders
-                .filter((order) => order.status === column.id)
-                .map((order) => (
+              {ordersByStatus[column.id].map((order) => (
                   <div
                     key={order.id}
                     className="bg-white rounded-lg shadow p-4 cursor-move"
@@ -189,7 +211,7 @@ export function KanbanBoard() {
                   <div className="flex gap-2">
                     {getOrderDetails(selectedOrder)?.pzDocumentLink && (
                       <a 
-                        href={getOrderDetails(selectedOrder)?.pzDocumentLink}
+                        href={getOrderDetails(selectedOrder)?.pzDocumentLink || ''}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
@@ -199,7 +221,7 @@ export function KanbanBoard() {
                     )}
                     {getOrderDetails(selectedOrder)?.invoiceLink && (
                       <a
-                        href={getOrderDetails(selectedOrder)?.invoiceLink}
+                        href={getOrderDetails(selectedOrder)?.invoiceLink || ''}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800"
