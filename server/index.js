@@ -670,6 +670,64 @@ app.post('/api/auth/change-password', async (req, res) => {
   }
 });
 
+// Get all users (admin only)
+app.get('/api/users', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader) {
+    return res.status(401).json({ error: 'No authorization token' });
+  }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const db = await initDatabase();
+    
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [decoded.id]);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const users = await db.all('SELECT id, username, email, role FROM users');
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Update user role (admin only)
+app.put('/api/users/:id/role', async (req, res) => {
+  const { role } = req.body;
+  const { id } = req.params;
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader) {
+    return res.status(401).json({ error: 'No authorization token' });
+  }
+
+  if (!['admin', 'manager', 'user'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const db = await initDatabase();
+    
+    const admin = await db.get('SELECT * FROM users WHERE id = ?', [decoded.id]);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    await db.run('UPDATE users SET role = ? WHERE id = ?', [role, id]);
+    res.json({ message: 'Role updated successfully' });
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
 // Call this function before starting the server
 app.listen(3001, async () => {
     try {
