@@ -6,6 +6,33 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
 import fetch from 'node-fetch';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+
+// Add these helper functions at the top of the file after imports
+async function hashPassword(password) {
+  const saltRounds = 10;
+  return bcrypt.hash(password, saltRounds);
+}
+
+async function verifyPassword(password, hashedPassword) {
+  return bcrypt.compare(password, hashedPassword);
+}
+
+function generateJWT(user) {
+  return jwt.sign(
+    { 
+      id: user.id, 
+      username: user.username, 
+      role: user.role 
+    }, 
+    JWT_SECRET, 
+    { expiresIn: '24h' }
+  );
+}
+
+// Add these constants at the top of the file
+const JWT_SECRET = 'your-secret-key'; // In production, use environment
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,69 +44,130 @@ let db = null;
 
 // Initialize the database with correct table schema
 async function initDatabase() {
-    if (!db) {
-        db = await open({
-            filename: dbPath,
-            driver: sqlite3.Database
-        });
+  const db = await open({
+    filename: dbPath,
+    driver: sqlite3.Database
+  });
 
-        await db.exec(`
-            CREATE TABLE IF NOT EXISTS orders (
-                id TEXT PRIMARY KEY,
-                orderNumber TEXT UNIQUE,
-                clientName TEXT,
-                projectName TEXT,
-                status TEXT,
-                notes TEXT DEFAULT NULL,
-                pzDocumentLink TEXT DEFAULT NULL,
-                invoiceLink TEXT DEFAULT NULL,
-                pzAddedAt TEXT DEFAULT NULL,
-                invoiceAddedAt TEXT DEFAULT NULL,
-                userId TEXT,
-                createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-                updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
-                isArchived BOOLEAN DEFAULT 0,
-                archivedAt TEXT DEFAULT NULL
-            );
+  try {
+    // Check if users table exists
+    const usersTable = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+    
+    if (!usersTable) {
+      // Create users table only if it doesn't exist
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT UNIQUE NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          password TEXT NOT NULL,
+          role TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
 
-            CREATE TABLE IF NOT EXISTS products (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
-            );
+      // Create default admin account only if table was just created
+      await db.run(`
+        INSERT INTO users (username, email, password, role)
+        VALUES ('admin', 'admin@example.com', ?, 'admin')
+      `, [await hashPassword('admin123')]);
 
-            CREATE TABLE IF NOT EXISTS order_products (
-                orderId TEXT,
-                productId TEXT,
-                quantity INTEGER,
-                FOREIGN KEY (orderId) REFERENCES orders(id),
-                FOREIGN KEY (productId) REFERENCES products(id),
-                PRIMARY KEY (orderId, productId)
-            );
-        `);
+      console.log('Created users table with admin account');
     }
+
+    // Create other necessary tables
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS products (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS orders (
+        id TEXT PRIMARY KEY,
+        orderNumber TEXT UNIQUE,
+        clientName TEXT,
+        projectName TEXT,
+        status TEXT,
+        notes TEXT,
+        pzDocumentLink TEXT,
+        invoiceLink TEXT,
+        pzAddedAt TEXT,
+        invoiceAddedAt TEXT,
+        userId TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        isArchived BOOLEAN DEFAULT 0,
+        archivedAt TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS order_products (
+        orderId TEXT,
+        productId TEXT,
+        quantity INTEGER,
+        FOREIGN KEY (orderId) REFERENCES orders(id),
+        FOREIGN KEY (productId) REFERENCES products(id),
+        PRIMARY KEY (orderId, productId)
+      );
+    `);
+
     return db;
+  } catch (error) {
+    console.error('Database initialization error:', error);
+    throw error;
+  }
 }
 
-// Add this after initializing the database connection
+// Update the addMissingColumns function
 async function addMissingColumns() {
   const db = await initDatabase();
   
   try {
-    const tableInfo = await db.all(`PRAGMA table_info(orders)`);
-    const existingColumns = tableInfo.map(col => col.name);
+    // Check if users table exists with email column
+    const usersTable = await db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'");
+    
+    if (!usersTable) {
+      // Drop existing users table if it exists
+      await db.exec('DROP TABLE IF EXISTS users');
 
-    // Only try to add columns that don't exist
-    if (!existingColumns.includes('isArchived')) {
+      // Create new users table with all required columns
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT UNIQUE NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          password TEXT NOT NULL,
+          role TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create default admin account
+      await db.run(`
+        INSERT INTO users (username, email, password, role)
+        VALUES ('admin', 'admin@example.com', ?, 'admin')
+      `, [await hashPassword('admin123')]);
+
+      console.log('Created users table with admin account');
+    }
+
+    // Check and add orders table columns
+    const tableInfoOrders = await db.all(`PRAGMA table_info(orders)`);
+    const existingColumnsOrders = tableInfoOrders.map(col => col.name);
+
+    if (!existingColumnsOrders.includes('isArchived')) {
       await db.run(`ALTER TABLE orders ADD COLUMN isArchived BOOLEAN DEFAULT 0`);
-      console.log('Added column isArchived');
+      console.log('Added column isArchived to orders table');
     }
 
-    if (!existingColumns.includes('archivedAt')) {
+    if (!existingColumnsOrders.includes('archivedAt')) {
       await db.run(`ALTER TABLE orders ADD COLUMN archivedAt TEXT DEFAULT NULL`);
-      console.log('Added column archivedAt');
+      console.log('Added column archivedAt to orders table');
     }
+
+    console.log('Database migration completed successfully');
   } catch (error) {
-    console.error('Error adding columns:', error);
+    console.error('Error during migration:', error);
+    throw error;
   }
 }
 
@@ -499,6 +587,86 @@ app.get('/api/orders/:id/products', async (req, res) => {
   } catch (error) {
     console.error('Error fetching order products:', error);
     res.status(500).json({ error: 'Failed to fetch order products' });
+  }
+});
+
+// User registration
+app.post('/api/auth/register', async (req, res) => {
+  const { username, email, password } = req.body;
+  
+  try {
+    const db = await initDatabase();
+    
+    // Check if username or email already exists
+    const existingUser = await db.get(
+      'SELECT * FROM users WHERE username = ? OR email = ?', 
+      [username, email]
+    );
+    
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: existingUser.username === username ? 
+          'Username already exists' : 
+          'Email already exists' 
+      });
+    }
+
+    const hashedPassword = await hashPassword(password);
+    
+    await db.run(`
+      INSERT INTO users (username, email, password, role)
+      VALUES (?, ?, ?, 'user')
+    `, [username, email, hashedPassword]);
+
+    res.status(201).json({ message: 'User created successfully' });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ 
+      error: 'Failed to create user',
+      details: error.message 
+    });
+  }
+});
+
+// User login
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  const db = await initDatabase();
+  
+  const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+  if (!user || !await verifyPassword(password, user.password)) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  const token = generateJWT(user);
+  res.json({ token, role: user.role });
+});
+
+// Add password change endpoint
+app.post('/api/auth/change-password', async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader) {
+    return res.status(401).json({ error: 'No authorization token' });
+  }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const db = await initDatabase();
+    
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [decoded.id]);
+    if (!user || !await verifyPassword(currentPassword, user.password)) {
+      return res.status(401).json({ error: 'Invalid current password' });
+    }
+
+    const hashedNewPassword = await hashPassword(newPassword);
+    await db.run('UPDATE users SET password = ? WHERE id = ?', [hashedNewPassword, user.id]);
+    
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update password' });
   }
 });
 

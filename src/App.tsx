@@ -6,7 +6,6 @@ import 'react-tooltip/dist/react-tooltip.css';
 import { Dashboard } from './components/Dashboard';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
-import { KanbanBoard } from './components/KanbanBoard';
 import { Layout } from './components/Layout';
 import type { Order } from './types';
 import { DataProvider } from './contexts/DataContext';
@@ -15,6 +14,10 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { databaseService } from './services/databaseService';
 import Modal from 'react-modal';
 import { ArchivedOrders } from './components/ArchivedOrders';
+import { AuthProvider } from './contexts/AuthContext';
+import { Login } from './pages/Login';
+import { Register } from './pages/Register';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Ustaw element nadrzędny dla modali
 Modal.setAppElement('#root');
@@ -171,30 +174,41 @@ export function LocalOrderList({ onNewOrder }: OrderListProps) {
 
 function App() {
   return (
-    <DataProvider>
-      <ErrorBoundary>
-        <Router>
-          <Routes>
-            <Route path="/" element={
-              <Layout>
-                <div className="min-h-screen bg-gray-50">
-                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    <Dashboard />
-                    <div className="mt-8">
-                      <KanbanBoard />
-                    </div>
-                  </div>
-                </div>
-              </Layout>
-            } />
-            <Route path="/products" element={<Products />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/archived" element={<ArchivedOrders />} />
-          </Routes>
-        </Router>
-      </ErrorBoundary>
-    </DataProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <DataProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Dashboard />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <Settings />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/products" element={<Products />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/archived" element={<ArchivedOrders />} />
+            </Routes>
+          </Router>
+        </DataProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

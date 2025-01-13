@@ -1,5 +1,5 @@
-import React from 'react';
 import { TrendingUp, Package, ClipboardList, Users } from 'lucide-react';
+import { KanbanBoard } from './KanbanBoard';
 
 export function Dashboard() {
   const stats = [
@@ -10,8 +10,9 @@ export function Dashboard() {
   ];
 
   return (
-    <div>
+    <div className="space-y-6 p-6">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h2>
+      
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <div
@@ -34,6 +35,11 @@ export function Dashboard() {
             </dd>
           </div>
         ))}
+      </div>
+
+      {/* Add KanbanBoard component */}
+      <div className="mt-8">
+        <KanbanBoard />
       </div>
     </div>
   );
