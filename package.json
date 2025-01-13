@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "clean": "rm -rf dist",
-    "init-db": "NODE_OPTIONS=\"--loader ts-node/esm\" node src/scripts/initDatabase.ts",
+    "init-db": "node src/scripts/initDatabase.js",
     "dev": "vite",
     "server": "node server/index.js",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
