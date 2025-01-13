@@ -14,7 +14,7 @@ const modalStyles = {
     bottom: 'auto',
     marginRight: '-50%',
     transform: 'translate(-50%, -50%)',
-    maxWidth: '600px',
+    maxWidth: '800px', // increased from 600px
     width: '90%',
     borderRadius: '8px',
     padding: '20px'
@@ -294,91 +294,116 @@ export function ArchivedOrders() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="font-medium">Order Number</h3>
-                <p>{selectedOrder.orderNumber}</p>
-              </div>
-              <div>
-                <h3 className="font-medium">Status</h3>
-                <p>{selectedOrder.status}</p>
-              </div>
-              <div>
-                <h3 className="font-medium">Client</h3>
-                <p>{selectedOrder.clientName}</p>
-              </div>
-              <div>
-                <h3 className="font-medium">Project</h3>
-                <p>{selectedOrder.projectName}</p>
-              </div>
-              <div>
-                <h3 className="font-medium">Created At</h3>
-                <p>{new Date(selectedOrder.createdAt).toLocaleString()}</p>
-              </div>
-              <div>
-                <h3 className="font-medium">Archived At</h3>
-                <p>{selectedOrder.archivedAt ? new Date(selectedOrder.archivedAt).toLocaleString() : '-'}</p>
-              </div>
-              <div>
-                <h3 className="font-medium">PZ Added At</h3>
-                <p>
-                  {selectedOrder.pzAddedAt 
-                    ? new Date(selectedOrder.pzAddedAt).toLocaleString() 
-                    : 'Not added yet'}
-                </p>
-              </div>
-              <div>
-                <h3 className="font-medium">Invoice Added At</h3>
-                <p>
-                  {selectedOrder.invoiceAddedAt 
-                    ? new Date(selectedOrder.invoiceAddedAt).toLocaleString() 
-                    : 'Not added yet'}
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="font-medium mb-2">Products</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                {selectedOrder.products.map(({ productId, quantity }) => (
-                  <div key={productId} className="flex justify-between py-1">
-                    <span>{getProductName(productId)}</span>
-                    <span>×{quantity}</span>
+            <div className="grid grid-cols-2 gap-6">
+              {/* Left Column */}
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="font-medium">Order Number</h3>
+                    <p>{selectedOrder.orderNumber}</p>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div>
+                    <h3 className="font-medium">Status</h3>
+                    <p>{selectedOrder.status}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Client</h3>
+                    <p>{selectedOrder.clientName}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Project</h3>
+                    <p>{selectedOrder.projectName}</p>
+                  </div>
+                </div>
 
-            {selectedOrder.notes && (
-              <div>
-                <h3 className="font-medium mb-2">Notes</h3>
-                <p className="bg-gray-50 rounded-lg p-4">{selectedOrder.notes}</p>
-              </div>
-            )}
+                <div>
+                  <h3 className="font-medium mb-2">Products</h3>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {selectedOrder.products.map(({ productId, quantity }) => (
+                      <div key={productId} className="flex justify-between py-1">
+                        <span>{getProductName(productId)}</span>
+                        <span>×{quantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-            <div>
-              <h3 className="font-medium mb-2">Documents</h3>
-              <div className="flex gap-2">
-                {selectedOrder.pzDocumentLink && (
-                  <a 
-                    href={selectedOrder.pzDocumentLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
-                  >
-                    PZ Document
-                  </a>
-                )}
-                {selectedOrder.invoiceLink && (
-                  <a
-                    href={selectedOrder.invoiceLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800"
-                  >
-                    Invoice
-                  </a>
-                )}
+                <div>
+                  <h3 className="font-medium mb-2">Documents</h3>
+                  <div className="flex gap-2">
+                    {selectedOrder.pzDocumentLink && (
+                      <a 
+                        href={selectedOrder.pzDocumentLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+                      >
+                        PZ Document
+                      </a>
+                    )}
+                    {selectedOrder.invoiceLink && (
+                      <a
+                        href={selectedOrder.invoiceLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800"
+                      >
+                        Invoice
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Timeline and Notes */}
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-medium mb-2">Event Timeline</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 font-mono text-xs overflow-y-auto max-h-[calc(50vh-200px)]">
+                    {[
+                      { date: selectedOrder.createdAt, event: 'Created' },
+                      { date: selectedOrder.archivedAt, event: 'Archived' },
+                      { date: selectedOrder.pzAddedAt, event: 'PZ Document Added' },
+                      { date: selectedOrder.invoiceAddedAt, event: 'Invoice Added' }
+                    ]
+                      .filter(({date}) => date !== undefined && date !== null)
+                      .sort((a, b) => {
+                        const dateA = new Date(a.date as string).getTime();
+                        const dateB = new Date(b.date as string).getTime();
+                        return dateB - dateA;
+                      })
+                      .map(({date, event}, index) => (
+                        <div 
+                          key={index} 
+                          className="text-gray-900 mb-1 last:mb-0"
+                        >
+                          <span className="text-gray-600">
+                            {new Date(date as string).toLocaleString('pl-PL', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit'
+                            })}
+                          </span>
+                          <span className="text-gray-500 mx-2">-</span>
+                          <span className="text-gray-900 font-medium">{event}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-medium mb-2">Notes</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 min-h-[100px]">
+                    {selectedOrder.notes ? (
+                      <p className="text-gray-900">{selectedOrder.notes}</p>
+                    ) : (
+                      <p className="text-gray-500 italic">No notes added</p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
