@@ -3,10 +3,10 @@ import { useAuth } from '../contexts/AuthContext';
 
 export function ProtectedRoute({ 
   children, 
-  requiredRole 
+  requiredRole
 }: { 
   children: React.ReactNode, 
-  requiredRole?: string 
+  requiredRole?: string
 }) {
   const auth = useAuth();
 

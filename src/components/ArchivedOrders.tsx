@@ -38,11 +38,10 @@ export function ArchivedOrders() {
   const [projectFilter, setProjectFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  // Add new state for modal
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   // Filter only archived orders
-  const archivedOrders = orders.filter((order: Order) => order.isArchived);
+  const archivedOrders = orders.filter(order => order.isArchived);
 
   // Handle sorting
   const handleSort = (field: SortField) => {
@@ -93,183 +92,177 @@ export function ArchivedOrders() {
 
   if (isLoading) {
     return (
-      <Layout>
-        <div className="flex justify-center items-center p-8">
-          <div className="text-gray-500">Loading archived orders...</div>
-        </div>
-      </Layout>
+      <div className="flex justify-center items-center p-8">
+        <div className="text-gray-500">Loading archived orders...</div>
+      </div>
     );
   }
 
   if (archivedOrders.length === 0) {
     return (
-      <Layout>
-        <div className="flex justify-center items-center p-8">
-          <div className="text-gray-500">No archived orders found</div>
-        </div>
-      </Layout>
+      <div className="flex justify-center items-center p-8">
+        <div className="text-gray-500">No archived orders found</div>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="min-h-screen bg-gray-100 p-6">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Archived Orders</h1>
-          
-          {/* Filters */}
-          <div className="bg-white p-4 rounded-lg shadow mb-6 grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Client</label>
-              <input
-                type="text"
-                value={clientFilter}
-                onChange={(e) => setClientFilter(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="Filter by client..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Project</label>
-              <input
-                type="text"
-                value={projectFilter}
-                onChange={(e) => setProjectFilter(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="Filter by project..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Search</label>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="Search products..."
-              />
-            </div>
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-2xl font-bold mb-6">Archived Orders</h1>
+        
+        {/* Filters */}
+        <div className="bg-white p-4 rounded-lg shadow mb-6 grid grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Client</label>
+            <input
+              type="text"
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              placeholder="Filter by client..."
+            />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Project</label>
+            <input
+              type="text"
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              placeholder="Filter by project..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Search</label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              placeholder="Search products..."
+            />
+          </div>
+        </div>
 
-          {/* Table */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th 
-                    onClick={() => handleSort('orderNumber')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      Order Number
-                      {renderSortIcon('orderNumber')}
-                    </div>
-                  </th>
-                  <th 
-                    onClick={() => handleSort('clientName')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      Client
-                      {renderSortIcon('clientName')}
-                    </div>
-                  </th>
-                  <th 
-                    onClick={() => handleSort('projectName')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      Project
-                      {renderSortIcon('projectName')}
-                    </div>
-                  </th>
-                  <th 
-                    onClick={() => handleSort('status')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      Status
-                      {renderSortIcon('status')}
-                    </div>
-                  </th>
-                  <th 
-                    onClick={() => handleSort('createdAt')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      Created At
-                      {renderSortIcon('createdAt')}
-                    </div>
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+        {/* Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th 
+                  onClick={() => handleSort('orderNumber')}
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    Order Number
+                    {renderSortIcon('orderNumber')}
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('clientName')}
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    Client
+                    {renderSortIcon('clientName')}
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('projectName')}
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    Project
+                    {renderSortIcon('projectName')}
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('status')}
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    Status
+                    {renderSortIcon('status')}
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('createdAt')}
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    Created At
+                    {renderSortIcon('createdAt')}
+                  </div>
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {paginatedOrders.map((order) => (
+                <tr key={order.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {order.orderNumber}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.clientName}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.projectName}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(order.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button
+                      onClick={() => setSelectedOrder(order)}
+                      className="text-gray-600 hover:text-gray-900"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedOrders.map((order) => (
-                  <tr key={order.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {order.orderNumber}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {order.clientName}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {order.projectName}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800`}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(order.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => setSelectedOrder(order)}
-                        className="text-gray-600 hover:text-gray-900"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-          {/* Pagination */}
-          <div className="px-4 py-3 border-t border-gray-200 sm:px-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
-                  <span className="font-medium">
-                    {Math.min(startIndex + itemsPerPage, sortedOrders.length)}
-                  </span>{' '}
-                  of <span className="font-medium">{sortedOrders.length}</span> results
-                </p>
-              </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
-                </nav>
-              </div>
+        {/* Pagination */}
+        <div className="px-4 py-3 border-t border-gray-200 sm:px-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-gray-700">
+                Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
+                <span className="font-medium">
+                  {Math.min(startIndex + itemsPerPage, sortedOrders.length)}
+                </span>{' '}
+                of <span className="font-medium">{sortedOrders.length}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </nav>
             </div>
           </div>
         </div>
@@ -409,6 +402,6 @@ export function ArchivedOrders() {
           </div>
         )}
       </Modal>
-    </Layout>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { Order, Product } from '../types/index.js';
+import type { Order, Product } from '../types'; // Import from types.ts instead of server/index.js
 
 export interface LocalOrder extends Omit<Order, 'notes' | 'pzDocumentLink' | 'invoiceLink' | 'pzAddedAt' | 'invoiceAddedAt'> {
   notes?: string;
@@ -10,7 +10,7 @@ export interface LocalOrder extends Omit<Order, 'notes' | 'pzDocumentLink' | 'in
   createdAt: string;
   updatedAt: string;
   isArchived: boolean;  // Add required archive flag
-  archivedAt: string | null;  // Add optional archive timestamp
+  archivedAt: string | undefined;  // Add optional archive timestamp
   products: Array<{
     productId: string;
     quantity: number;
@@ -21,12 +21,13 @@ const API_URL = 'http://localhost:3001/api';
 
 export const databaseService = {
   async getOrders(): Promise<LocalOrder[]> {
-    const response = await fetch(`${API_URL}/orders`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch orders');
-    }
-    const orders = await response.json();
-    return orders;
+    const response = await fetch(`${API_URL}/orders`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      }
+    });
+    if (!response.ok) throw new Error('Failed to fetch orders');
+    return response.json();
   },
 
   async addOrder(order: Omit<LocalOrder, 'id'>): Promise<LocalOrder> {
@@ -65,43 +66,27 @@ export const databaseService = {
     }
   },
 
-  async getOrder(id: string): Promise<LocalOrder | null> {
-    const response = await fetch(`${API_URL}/orders/${id}`);
-    if (!response.ok) {
-      console.error('Failed to load order:', response.status, await response.text());
-      return null;
-    }
-    const order = await response.json();
-    console.log('Loaded order:', order);
-    return order;
+  async getOrder(id: string): Promise<LocalOrder> {
+    const response = await fetch(`${API_URL}/orders/${id}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      }
+    });
+    if (!response.ok) throw new Error('Failed to fetch order');
+    return response.json();
   },
 
-  async updateOrder(id: string, order: LocalOrder): Promise<LocalOrder> {
-    try {
-      const response = await fetch(`${API_URL}/orders/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(order)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update order');
-      }
-
-      const updatedOrder = await response.json();
-      return {
-        ...updatedOrder,
-        isArchived: Boolean(updatedOrder.isArchived),
-        pzAddedAt: updatedOrder.pzAddedAt || undefined,
-        invoiceAddedAt: updatedOrder.invoiceAddedAt || undefined,
-        archivedAt: updatedOrder.archivedAt || undefined
-      };
-    } catch (error) {
-      console.error('Error updating order:', error);
-      throw error;
-    }
+  async updateOrder(id: string, order: Partial<LocalOrder>): Promise<LocalOrder> {
+    const response = await fetch(`${API_URL}/orders/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(order)
+    });
+    if (!response.ok) throw new Error('Failed to update order');
+    return response.json();
   },
 
   async getProducts(): Promise<Product[]> {
@@ -180,31 +165,25 @@ export const databaseService = {
   },
 
   async archiveOrder(id: string): Promise<void> {
-    try {
-      await fetch(`${API_URL}/orders/${id}/archive`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-    } catch (error) {
-      console.error('Error archiving order:', error);
-      throw error;
-    }
+    const response = await fetch(`${API_URL}/orders/${id}/archive`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error('Failed to archive order');
   },
 
   async unarchiveOrder(id: string): Promise<void> {
-    try {
-      await fetch(`${API_URL}/orders/${id}/unarchive`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-    } catch (error) {
-      console.error('Error unarchiving order:', error);
-      throw error;
-    }
+    const response = await fetch(`${API_URL}/orders/${id}/unarchive`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error('Failed to unarchive order');
   }
 };
 

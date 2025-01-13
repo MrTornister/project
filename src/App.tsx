@@ -18,6 +18,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { Outlet } from 'react-router-dom';
 
 // Ustaw element nadrzędny dla modali
 Modal.setAppElement('#root');
@@ -186,24 +187,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Layout>
-                      <Dashboard />
+                      <Outlet />
                     </Layout>
                   </ProtectedRoute>
                 }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute requiredRole="admin">
-                    <Layout>
-                      <Settings />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/products" element={<Products />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/archived" element={<ArchivedOrders />} />
+              >
+                <Route index element={<Dashboard />} />
+                <Route path="orders" element={<Orders />} />
+                <Route path="archived-orders" element={<ArchivedOrders />} />
+                <Route path="settings" element={<Settings />} />
+              </Route>
             </Routes>
           </Router>
         </DataProvider>

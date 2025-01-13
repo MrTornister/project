@@ -5,6 +5,10 @@ export type OrderStatus =
   | 'completed'
   | 'archived';
 
+export interface Product {
+  id: string;
+  name: string;
+}
 
 export interface Order {
   id: string;

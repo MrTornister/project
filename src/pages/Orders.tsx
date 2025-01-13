@@ -1,13 +1,12 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Layout } from '../components/Layout';
-import { OrderForm } from '../components/OrderForm';
 import type { Order } from '../types';
-import { databaseService, type LocalOrder } from '../services/databaseService';
+import { databaseService } from '../services/databaseService';
 import { useData } from '../contexts/DataContext';
 import { Edit, Trash, Search, ArrowUpDown, Eye } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import { EditOrderForm } from '../components/EditOrderForm';
+import { OrderForm } from '../components/OrderForm';
 
 type SortField = 'orderNumber' | 'clientName' | 'projectName' | 'status' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
@@ -25,136 +24,59 @@ export function Orders() {
 
   const handleSubmit = async (orderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      console.log('Orders component received order data:', orderData);
-      console.log('PZ Document Link in Orders:', orderData.pzDocumentLink);
-      
-      // Convert to LocalOrder type for database
-      const localOrder = {
+      const orderToCreate = {
         ...orderData,
-        userId: '1',
-        isArchived: false,
         pzAddedAt: orderData.pzAddedAt ? new Date(orderData.pzAddedAt) : undefined,
         invoiceAddedAt: orderData.invoiceAddedAt ? new Date(orderData.invoiceAddedAt) : undefined,
         invoiceLink: orderData.invoiceLink || undefined,
-        archivedAt: orderData.archivedAt || null
+        pzDocumentLink: orderData.pzDocumentLink || undefined,
+        archivedAt: undefined // Add this line
       };
-
-      await databaseService.createOrder(localOrder);
+      
+      await databaseService.createOrder(orderToCreate);
       await refreshOrders();
       setIsCreating(false);
     } catch (error) {
-      console.error('Error in handleSubmit:', error);
+      console.error('Error creating order:', error);
       throw error;
     }
   };
 
-  const handleEdit = (order: Order) => {
-    // Ensure isArchived is always a boolean
-    setEditingOrder({
-      ...order,
-      userId: order.userId || '1', // Add required userId
-      isArchived: order.isArchived ?? false, 
-      invoiceLink: order.invoiceLink || undefined
-    });
-  };
-
-  const handleUpdateOrder = async (orderId: string, updatedOrder: Order) => {
-    try {
-      console.log('Updating order in Orders component:', { 
-        orderId, 
-        updatedOrder,
-        pzDocumentLink: updatedOrder.pzDocumentLink 
-      });
-
-      // Convert the Order type to LocalOrder type
-      const localOrder: LocalOrder = {
-        ...updatedOrder,
-        userId: updatedOrder.userId || '1', // Ensure userId is present
-        isArchived: Boolean(updatedOrder.isArchived),
-        pzAddedAt: updatedOrder.pzAddedAt ? new Date(updatedOrder.pzAddedAt) : undefined,
-        invoiceAddedAt: updatedOrder.invoiceAddedAt ? new Date(updatedOrder.invoiceAddedAt) : undefined,
-        invoiceLink: updatedOrder.invoiceLink || undefined,
-        notes: updatedOrder.notes || undefined,
-        pzDocumentLink: updatedOrder.pzDocumentLink || undefined,
-        archivedAt: updatedOrder.archivedAt || null // Change undefined to null
-      };
-
-      const result = await databaseService.updateOrder(orderId, localOrder);
-      console.log('Update result:', result);
-
-      if (!result) {
-        throw new Error('Failed to update order - no response from server');
-      }
-
-      await refreshOrders();
-      setEditingOrder(null);
-    } catch (error) {
-      console.error('Error updating order:', error);
-      alert('Failed to update order. Please check console for details.');
-    }
+  const handleUpdateOrder = async (updatedOrder: Order) => {
+    const orderToUpdate = {
+      ...updatedOrder,
+      pzAddedAt: updatedOrder.pzAddedAt ? new Date(updatedOrder.pzAddedAt) : undefined,
+      invoiceAddedAt: updatedOrder.invoiceAddedAt ? new Date(updatedOrder.invoiceAddedAt) : undefined,
+      invoiceLink: updatedOrder.invoiceLink || undefined,
+      pzDocumentLink: updatedOrder.pzDocumentLink || undefined
+    };
+    await databaseService.updateOrder(editingOrder!.id, orderToUpdate);
+    await refreshOrders();
+    setEditingOrder(null);
   };
 
   return (
-    <Layout>
-      <div className="min-h-screen bg-gray-100">
-        <div className="max-w-7xl mx-auto p-4">
-          {/* Buttons Container - Added before conditional rendering */}
-          <div className="mb-4 flex justify-end gap-2">
-            <button
-              onClick={() => {
-                console.log('Delete All clicked');
-                // handleDeleteAllOrders();
-              }}
-              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-700"
-            >
-              Delete All Orders
-            </button>
-            <button
-              onClick={() => setIsCreating(true)}
-              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-            >
-              New Order
-            </button>
-          </div>
-
-          {isCreating ? (
-            <OrderForm
-              onSubmit={handleSubmit}
-              onCancel={() => setIsCreating(false)}
-            />
-          ) : editingOrder ? (
-            <EditOrderForm
-              order={{
-                ...editingOrder,
-                isArchived: editingOrder.isArchived ?? false,
-                invoiceLink: editingOrder.invoiceLink || undefined
-                // Remove userId from here since it's not needed in EditOrderFormProps
-              }}
-              onSave={async (updatedOrder) => {
-                try {
-                  await handleUpdateOrder(editingOrder.id, {
-                    ...updatedOrder,
-                    userId: editingOrder.userId, // Add userId when sending to handleUpdateOrder
-                    invoiceLink: updatedOrder.invoiceLink || undefined
-                  });
-                } catch (error) {
-                  console.error('Error in onSave callback:', error);
-                  throw error;
-                }
-              }}
-              onCancel={() => setEditingOrder(null)}
-            />
-          ) : (
-            <div className="bg-white shadow rounded-lg">
-              <OrderList 
-                onNewOrder={() => setIsCreating(true)}
-                onEdit={handleEdit}
-              />
-            </div>
-          )}
-        </div>
+    <div className="min-h-screen bg-gray-100">
+      <div className="max-w-7xl mx-auto p-4">
+        {isCreating ? (
+          <OrderForm
+            onSubmit={handleSubmit}
+            onCancel={() => setIsCreating(false)}
+          />
+        ) : editingOrder ? (
+          <EditOrderForm
+            order={editingOrder}
+            onSave={handleUpdateOrder}
+            onCancel={() => setEditingOrder(null)}
+          />
+        ) : (
+          <OrderList
+            onNewOrder={() => setIsCreating(true)}
+            onEdit={setEditingOrder}
+          />
+        )}
       </div>
-    </Layout>
+    </div>
   );
 }
 

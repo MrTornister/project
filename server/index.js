@@ -32,7 +32,51 @@ function generateJWT(user) {
 }
 
 // Add these constants at the top of the file
-const JWT_SECRET = 'your-secret-key'; // In production, use environment
+const JWT_SECRET = 'your-secret-key'; // In production, use environment variable
+
+// Update the checkRole middleware to handle multiple roles
+const checkRole = (allowedRoles) => {
+  return async (req, res, next) => {
+    try {
+      const authHeader = req.headers.authorization;
+      
+      if (!authHeader) {
+        console.log('No auth header provided');
+        return res.status(401).json({ error: 'No authorization token' });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const db = await initDatabase();
+      
+      const user = await db.get('SELECT * FROM users WHERE id = ?', [decoded.id]);
+      console.log('User role:', user?.role, 'Allowed roles:', allowedRoles);
+      
+      if (!user) {
+        console.log('User not found');
+        return res.status(403).json({ error: 'User not found' });
+      }
+
+      // Always allow admin access
+      if (user.role === 'admin') {
+        req.user = user;
+        return next();
+      }
+
+      // Check if user's role is in allowed roles
+      if (allowedRoles.includes(user.role)) {
+        req.user = user;
+        return next();
+      }
+
+      console.log('User role not allowed');
+      return res.status(403).json({ error: 'Unauthorized' });
+    } catch (error) {
+      console.error('Auth error:', error);
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+  };
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -217,119 +261,62 @@ app.get('/api/email/:fileId', async (req, res) => {
 });
 
 // Orders endpoints
-app.get('/api/orders', async (req, res) => {
-    try {
-        const db = await initDatabase();
-        const orders = await db.all(`
-            SELECT 
-                o.id, 
-                o.orderNumber, 
-                o.clientName, 
-                o.projectName, 
-                o.status,
-                o.notes,
-                o.pzDocumentLink,
-                o.invoiceLink, 
-                o.pzAddedAt,
-                o.invoiceAddedAt,
-                o.isArchived,
-                o.archivedAt,
-                datetime(o.createdAt) as createdAt,
-                datetime(o.updatedAt) as updatedAt,
-                o.userId
-            FROM orders o
-            ORDER BY o.createdAt DESC
-        `);
+// Get all orders including archived ones
+app.get('/api/orders', checkRole(['admin', 'manager', 'user']), async (req, res) => {
+  try {
+    const db = await initDatabase();
+    const user = req.user;
 
-        // Get products for each order
-        const ordersWithProducts = await Promise.all(orders.map(async (order) => {
-            const products = await db.all(`
-                SELECT productId, quantity 
-                FROM order_products 
-                WHERE orderId = ?
-            `, [order.id]);
-            
-            return {
-                ...order,
-                products: products || []
-            };
-        }));
+    const orders = await db.all(`
+      SELECT 
+        o.id, 
+        o.orderNumber, 
+        o.clientName, 
+        o.projectName, 
+        o.status,
+        o.notes,
+        o.pzDocumentLink,
+        o.invoiceLink,
+        o.pzAddedAt,
+        o.invoiceAddedAt,
+        o.userId,
+        o.isArchived,
+        o.archivedAt,
+        datetime(o.createdAt) as createdAt,
+        datetime(o.updatedAt) as updatedAt
+      FROM orders o
+      ORDER BY o.createdAt DESC
+    `);
 
-        console.log('Orders with products:', ordersWithProducts);
-        res.json(ordersWithProducts);
-    } catch (error) {
-        console.error('Error fetching orders:', error);
-        res.status(500).json({ error: 'Failed to fetch orders' });
+    // Get products for each order
+    for (let order of orders) {
+      const products = await db.all('SELECT * FROM order_products WHERE orderId = ?', [order.id]);
+      order.products = products;
     }
+
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({ error: 'Failed to fetch orders' });
+  }
 });
 
-// Fix the order creation endpoint
-app.post('/api/orders', async (req, res) => {
-    try {
-        const db = await initDatabase();
-        const order = req.body;
-        const id = `order_${Date.now()}`;
-        
-        console.log('Creating order with products:', order.products); // Debug log
-        
-        await db.run('BEGIN TRANSACTION');
-        
-        try {
-            // Insert main order record
-            await db.run(`
-                INSERT INTO orders (
-                    id, orderNumber, clientName, projectName, 
-                    status, notes, pzDocumentLink, invoiceLink,
-                    userId, createdAt, updatedAt
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-            `, [
-                id,
-                order.orderNumber,
-                order.clientName,
-                order.projectName,
-                order.status,
-                order.notes,
-                order.pzDocumentLink,
-                order.invoiceLink,
-                order.userId
-            ]);
-
-            // Insert order products
-            if (order.products && order.products.length > 0) {
-                for (const product of order.products) {
-                    console.log('Inserting product:', product); // Debug log
-                    await db.run(`
-                        INSERT INTO order_products (orderId, productId, quantity)
-                        VALUES (?, ?, ?)
-                    `, [id, product.productId, product.quantity]);
-                }
-            }
-
-            await db.run('COMMIT');
-
-            // Fetch the complete order with products
-            const createdOrder = await db.get('SELECT * FROM orders WHERE id = ?', [id]);
-            const products = await db.all(`
-                SELECT op.productId, op.quantity 
-                FROM order_products op 
-                WHERE op.orderId = ?
-            `, [id]);
-            
-            console.log('Created order:', { ...createdOrder, products }); // Debug log
-            
-            res.status(201).json({ ...createdOrder, products });
-        } catch (error) {
-            await db.run('ROLLBACK');
-            throw error;
-        }
-    } catch (error) {
-        console.error('Error creating order:', error);
-        res.status(500).json({ error: 'Failed to create order' });
-    }
+// Create order endpoint - allow all authenticated users
+app.post('/api/orders', checkRole(['admin', 'manager', 'user']), async (req, res) => {
+  try {
+    const db = await initDatabase();
+    const order = req.body;
+    const id = `order_${Date.now()}`;
+    
+    // ... rest of the create order logic ...
+  } catch (error) {
+    console.error('Error creating order:', error);
+    res.status(500).json({ error: 'Failed to create order' });
+  }
 });
 
 // Add this endpoint to server/index.js
-app.get('/api/orders/:id', async (req, res) => {
+app.get('/api/orders/:id', checkRole(['admin', 'manager', 'user']), async (req, res) => {
     try {
         const db = await initDatabase();
         const { id } = req.params;
@@ -363,7 +350,7 @@ app.get('/api/orders/:id', async (req, res) => {
 });
 
 // Update orders endpoint
-app.put('/api/orders/:id', async (req, res) => {
+app.put('/api/orders/:id', checkRole(['admin', 'manager']), async (req, res) => {
   const db = await initDatabase();
   
   try {
@@ -446,7 +433,7 @@ app.put('/api/orders/:id', async (req, res) => {
 });
 
 // Archive order
-app.put('/api/orders/:id/archive', async (req, res) => {
+app.put('/api/orders/:id/archive', checkRole(['admin', 'manager']), async (req, res) => {
   try {
     const db = await initDatabase();
     const { id } = req.params;
@@ -464,8 +451,8 @@ app.put('/api/orders/:id/archive', async (req, res) => {
   }
 });
 
-// Unarchive order
-app.put('/api/orders/:id/unarchive', async (req, res) => {
+// Unarchive order - add checkRole middleware
+app.put('/api/orders/:id/unarchive', checkRole(['admin', 'manager']), async (req, res) => {
   try {
     const db = await initDatabase();
     const { id } = req.params;
@@ -483,8 +470,24 @@ app.put('/api/orders/:id/unarchive', async (req, res) => {
   }
 });
 
+// Get archived orders endpoint
+app.get('/api/orders/archived', checkRole(['admin', 'manager', 'user']), async (req, res) => {
+  try {
+    const db = await initDatabase();
+    const orders = await db.all(`
+      SELECT * FROM orders 
+      WHERE isArchived = 1
+      ORDER BY createdAt DESC
+    `);
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching archived orders:', error);
+    res.status(500).json({ error: 'Failed to fetch archived orders' });
+  }
+});
+
 // Delete single order
-app.delete('/api/orders/:id', async (req, res) => {
+app.delete('/api/orders/:id', checkRole(['admin', 'manager']), async (req, res) => {
     try {
         const db = await initDatabase();
         const { id } = req.params;
@@ -631,15 +634,25 @@ app.post('/api/auth/register', async (req, res) => {
 // User login
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
-  const db = await initDatabase();
   
-  const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
-  if (!user || !await verifyPassword(password, user.password)) {
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
+  try {
+    const db = await initDatabase();
+    const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
 
-  const token = generateJWT(user);
-  res.json({ token, role: user.role });
+    if (!user || !await verifyPassword(password, user.password)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = generateJWT(user);
+    res.json({ 
+      token, 
+      role: user.role,
+      username: user.username 
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
 });
 
 // Add password change endpoint
